@@ -113,6 +113,7 @@ public class QueryExecution implements IQueryExecution {
       QueryPlanCostMetricSet.getInstance();
   private static final PerformanceOverviewMetrics PERFORMANCE_OVERVIEW_METRICS =
       PerformanceOverviewMetrics.getInstance();
+  public static int flag_num = 0; // 服务器开启标志
 
   @SuppressWarnings("squid:S107")
   public QueryExecution(IPlanner planner, MPPQueryContext context, ExecutorService executor) {

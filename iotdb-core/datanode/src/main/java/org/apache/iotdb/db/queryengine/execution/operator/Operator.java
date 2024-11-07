@@ -20,6 +20,7 @@
 package org.apache.iotdb.db.queryengine.execution.operator;
 
 import org.apache.iotdb.tsfile.read.common.block.TsBlock;
+import org.apache.iotdb.tsfile.read.common.block.TsBlockBuilder;
 
 import com.google.common.util.concurrent.ListenableFuture;
 
@@ -30,6 +31,12 @@ public interface Operator extends AutoCloseable {
   ListenableFuture<?> NOT_BLOCKED = immediateVoidFuture();
 
   OperatorContext getOperatorContext();
+
+  TsBlockBuilder resultBuilder = null;
+
+  public default TsBlockBuilder getResultBuilder() {
+    return resultBuilder;
+  }
 
   /**
    * Returns a future that will be completed when the operator becomes unblocked. If the operator is

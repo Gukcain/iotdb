@@ -148,6 +148,7 @@ import org.apache.iotdb.db.queryengine.plan.analyze.PredicateUtils;
 import org.apache.iotdb.db.queryengine.plan.analyze.TemplatedInfo;
 import org.apache.iotdb.db.queryengine.plan.analyze.TypeProvider;
 import org.apache.iotdb.db.queryengine.plan.analyze.cache.schema.DataNodeSchemaCache;
+import org.apache.iotdb.db.queryengine.plan.execution.PipeInfo;
 import org.apache.iotdb.db.queryengine.plan.expression.Expression;
 import org.apache.iotdb.db.queryengine.plan.expression.ExpressionFactory;
 import org.apache.iotdb.db.queryengine.plan.expression.leaf.TimeSeriesOperand;
@@ -2177,8 +2178,14 @@ public class OperatorTreeGenerator extends PlanVisitor<Operator, LocalExecutionP
             ? getOutputColumnTypesOfTimeJoinNode(node)
             : getOutputColumnTypes(node, context.getTypeProvider());
 
+//    return new InnerTimeJoinOperator(
+//        operatorContext, children, outputColumnTypes, timeComparator, getOutputColumnMap(node));
+    PipeInfo pipeInfo=PipeInfo.getInstance();//单例
+    int rec_fragmentId=pipeInfo.getRecFragmentId();
+    int send_fragmentId=pipeInfo.getSendFragmentId();
+    pipeInfo.addJoinSatus(Integer.parseInt(node.getPlanNodeId().getId()),send_fragmentId,rec_fragmentId);
     return new InnerTimeJoinOperator(
-        operatorContext, children, outputColumnTypes, timeComparator, getOutputColumnMap(node));
+            operatorContext, children, outputColumnTypes, timeComparator, getOutputColumnMap(node), rec_fragmentId, send_fragmentId);
   }
 
   private Map<InputLocation, Integer> getOutputColumnMap(InnerTimeJoinNode innerTimeJoinNode) {

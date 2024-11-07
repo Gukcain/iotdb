@@ -19,22 +19,42 @@
 
 package org.apache.iotdb.db.queryengine.execution.operator.process.join;
 
+import org.apache.iotdb.common.rpc.thrift.TEndPoint;
+import org.apache.iotdb.commons.path.PartialPath;
+import org.apache.iotdb.db.queryengine.execution.exchange.MPPDataExchangeManager;
+import org.apache.iotdb.db.queryengine.execution.exchange.MPPDataExchangeService;
+import org.apache.iotdb.db.queryengine.execution.exchange.sink.ISinkHandle;
+import org.apache.iotdb.db.queryengine.execution.exchange.sink.DownStreamChannelIndex;
+import org.apache.iotdb.db.queryengine.execution.exchange.sink.DownStreamChannelLocation;
+import org.apache.iotdb.db.queryengine.execution.exchange.sink.ShuffleSinkHandle;
+import org.apache.iotdb.db.queryengine.execution.exchange.source.ISourceHandle;
+import org.apache.iotdb.db.queryengine.execution.fragment.FragmentInstanceContext;
 import org.apache.iotdb.db.queryengine.execution.operator.Operator;
 import org.apache.iotdb.db.queryengine.execution.operator.OperatorContext;
 import org.apache.iotdb.db.queryengine.execution.operator.process.ProcessOperator;
 import org.apache.iotdb.db.queryengine.execution.operator.process.join.merge.TimeComparator;
+import org.apache.iotdb.db.queryengine.plan.execution.CloudEdgeCollaborativeFlag;
+import org.apache.iotdb.db.queryengine.plan.execution.PipeInfo;
+import org.apache.iotdb.db.queryengine.plan.execution.ReceiveTsBlock;
+import org.apache.iotdb.db.queryengine.plan.planner.plan.node.PlanNodeId;
 import org.apache.iotdb.db.queryengine.plan.planner.plan.parameter.InputLocation;
+import org.apache.iotdb.db.queryengine.plan.planner.plan.parameter.SeriesScanOptions;
+import org.apache.iotdb.db.queryengine.plan.statement.component.Ordering;
+import org.apache.iotdb.mpp.rpc.thrift.TFragmentInstanceId;
 import org.apache.iotdb.tsfile.common.conf.TSFileDescriptor;
+import org.apache.iotdb.tsfile.exception.write.UnSupportedDataTypeException;
 import org.apache.iotdb.tsfile.file.metadata.enums.TSDataType;
 import org.apache.iotdb.tsfile.read.common.block.TsBlock;
 import org.apache.iotdb.tsfile.read.common.block.TsBlockBuilder;
 import org.apache.iotdb.tsfile.read.common.block.column.Column;
 import org.apache.iotdb.tsfile.read.common.block.column.ColumnBuilder;
 import org.apache.iotdb.tsfile.read.common.block.column.TimeColumnBuilder;
+import org.apache.iotdb.tsfile.utils.BloomFilter;
 
 import com.google.common.util.concurrent.ListenableFuture;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -71,6 +91,30 @@ public class InnerTimeJoinOperator implements ProcessOperator {
   /** Indicate whether we found an empty child input in one loop */
   private boolean hasEmptyChildInput = false;
 
+  private boolean flag_boolean=false;
+  private boolean flag_binary=false;
+  private static TsBlock rev_tsblock=null;
+  private static Boolean Isrev = false;
+  private static Boolean finish_rev =false;
+  private static boolean finish_boolean=false;
+  private static boolean finish_binary=false;
+
+  private PlanNodeId localPlanNode;
+  private int edge_rec_fragmentId;   // to receive remote fragement
+  private int offset=0;
+  private static final MPPDataExchangeManager MPP_DATA_EXCHANGE_MANAGER =
+          MPPDataExchangeService.getInstance().getMPPDataExchangeManager();
+  private ISourceHandle sourceHandle;
+//  private SeriesScanOptions.Builder seriesScanBuilder;
+//  private PartialPath seriesPath;
+//  private Ordering scanOrder;
+  private int testflag=0;
+  private int CloudFragmentId=0;
+  private int edge_send_fragmentId;  // to send fragment(block processed with bloomfilter) from
+//  private static final MPPDataExchangeManager MPP_DATA_EXCHANGE_MANAGER =
+//          MPPDataExchangeService.getInstance().getMPPDataExchangeManager();
+  private ISinkHandle sinkHandle;
+
   public InnerTimeJoinOperator(
       OperatorContext operatorContext,
       List<Operator> children,
@@ -88,6 +132,30 @@ public class InnerTimeJoinOperator implements ProcessOperator {
     this.resultBuilder = new TsBlockBuilder(dataTypes);
     this.comparator = comparator;
     this.outputColumnMap = outputColumnMap;
+  }
+
+  public InnerTimeJoinOperator(
+          OperatorContext operatorContext,
+          List<Operator> children,
+          List<TSDataType> dataTypes,
+          TimeComparator comparator,
+          Map<InputLocation, Integer> outputColumnMap,
+          int rec_fragmentId,
+          int send_fragment) {
+    this.operatorContext = operatorContext;
+    this.children = children;
+    this.inputOperatorsCount = children.size();
+    this.inputTsBlocks = new TsBlock[inputOperatorsCount];
+    this.canCallNext = new boolean[inputOperatorsCount];
+    checkArgument(
+            children.size() > 1, "child size of InnerTimeJoinOperator should be larger than 1");
+    this.inputIndex = new int[this.inputOperatorsCount];
+    this.resultBuilder = new TsBlockBuilder(dataTypes);
+    this.comparator = comparator;
+    this.outputColumnMap = outputColumnMap;
+    this.edge_rec_fragmentId = rec_fragmentId;
+    this.edge_send_fragmentId = send_fragment;
+    this.localPlanNode = operatorContext.getPlanNodeId();
   }
 
   @Override
@@ -116,6 +184,61 @@ public class InnerTimeJoinOperator implements ProcessOperator {
         : successfulAsList(listenableFutures);
   }
 
+  public void createSourceHandle(){
+    // source
+    System.out.println("---in---");
+    System.out.println("---localfragmentid:"+edge_rec_fragmentId);
+    System.out.println("remote:"+PipeInfo.getInstance().getJoinStatus(Integer.parseInt(localPlanNode.getId())).getCloudSendFragmentId());
+    String queryId = "test_query_"+localPlanNode.getId();
+    TEndPoint remoteEndpoint = new TEndPoint("localhost", 10740);
+    TFragmentInstanceId remoteFragmentInstanceId = new TFragmentInstanceId(queryId, PipeInfo.getInstance().getJoinStatus(Integer.parseInt(localPlanNode.getId())).getCloudSendFragmentId(), "0");
+    String localPlanNodeId = "receive_test_"+localPlanNode.getId();
+    TFragmentInstanceId localFragmentInstanceId = new TFragmentInstanceId(queryId, edge_rec_fragmentId, "0");
+    long query_num=1;
+    FragmentInstanceContext instanceContext = new FragmentInstanceContext(query_num);
+    System.out.println("cloudid:"+PipeInfo.getInstance().getJoinStatus(Integer.parseInt(localPlanNode.getId())).getCloudSendFragmentId());
+    this.sourceHandle =MPP_DATA_EXCHANGE_MANAGER.createSourceHandle(
+            localFragmentInstanceId,
+            localPlanNodeId,
+            0,//IndexOfUpstreamSinkHandle
+            remoteEndpoint,
+            remoteFragmentInstanceId,
+            instanceContext::failed);
+    final long MOCK_TSBLOCK_SIZE = 1024L * 1024L;
+    sourceHandle.setMaxBytesCanReserve(MOCK_TSBLOCK_SIZE);
+  }
+
+  public void createSinkHandle(){
+    // sink
+    final String queryId = "test_query_"+localPlanNode.getId();//一个查询一个id就可以
+    final TEndPoint remoteEndpoint = new TEndPoint("localhost", 10744);
+    final TFragmentInstanceId remoteFragmentInstanceId = new TFragmentInstanceId(queryId, PipeInfo.getInstance().getJoinStatus(Integer.parseInt(localPlanNode.getId())).getCloudRecFragmentId(), "0");//fragmentId是int变量 local和remote对应上即可
+    final String remotePlanNodeId = "receive_test_"+localPlanNode.getId();
+    final String localPlanNodeId = "send_test_"+localPlanNode.getId();
+    final TFragmentInstanceId localFragmentInstanceId = new TFragmentInstanceId(queryId, edge_send_fragmentId, "0");
+    int channelNum = 1;
+    long query_num=1;
+    FragmentInstanceContext instanceContext = new FragmentInstanceContext(query_num);
+    DownStreamChannelIndex downStreamChannelIndex = new DownStreamChannelIndex(0);
+    sinkHandle =
+            MPP_DATA_EXCHANGE_MANAGER.createShuffleSinkHandle(
+                    Collections.singletonList(
+                            new DownStreamChannelLocation(
+                                    remoteEndpoint,
+                                    remoteFragmentInstanceId,
+                                    remotePlanNodeId)),
+                    downStreamChannelIndex,
+                    ShuffleSinkHandle.ShuffleStrategyEnum.PLAIN,
+                    localFragmentInstanceId,
+                    localPlanNodeId,
+                    instanceContext);
+    PipeInfo.getInstance().getJoinStatus(Integer.parseInt(localPlanNode.getId())).setSinkHandle(this.sinkHandle);
+    if(PipeInfo.getInstance().getPipeStatus()){
+      sinkHandle.tryOpenChannel(0);//打开通道
+    }
+
+  }
+
   @Override
   public TsBlock next() throws Exception {
     // start stopwatch
@@ -124,6 +247,136 @@ public class InnerTimeJoinOperator implements ProcessOperator {
     if (!prepareInput(start, maxRuntime)) {
       return null;
     }
+    PipeInfo pipeInfo=PipeInfo.getInstance();
+    System.out.println("----status:"+pipeInfo.getPipeStatus());
+    if (CloudEdgeCollaborativeFlag.getInstance().cloudEdgeCollaborativeFlag) {
+//      if(pipeInfo.getPipeStatus()){
+      // 构建pipeline的sourceHandle和sinkHandle
+      createSinkHandle();
+      createSourceHandle();
+
+      // 布隆过滤器处理构造新块
+      TsBlock resultBlock = null;
+      TsBlock bloomFilterReference = null;
+      int referenceIndex = 0;
+      int smallestSize = Integer.MAX_VALUE;
+      for (int i = 0; i < inputOperatorsCount; i++) {
+        if (inputTsBlocks[i] != null && inputTsBlocks[i].getPositionCount() < smallestSize) {
+          smallestSize = inputTsBlocks[i].getPositionCount();
+          referenceIndex = i;
+          bloomFilterReference = inputTsBlocks[i];
+        }
+      }
+      if (bloomFilterReference == null) {
+        return null;
+      }
+      BloomFilter filter =
+          BloomFilter.getEmptyBloomFilter(
+              TSFileDescriptor.getInstance().getConfig().getBloomFilterErrorRate(), smallestSize);
+      for (int i = 0; i < smallestSize; i++) {
+        long time = bloomFilterReference.getTimeByIndex(i);
+        filter.add(String.valueOf(time));
+      }
+      ArrayList<TsBlock> inputBlocksAfterProcess = new ArrayList<>();
+      for (int i = 0; i < inputOperatorsCount; i++) {
+        TsBlock block = inputTsBlocks[i];
+        if (i == referenceIndex) {
+          inputBlocksAfterProcess.add(block);
+        } else {
+          //          children.get(i).getResultBuilder();
+
+          List<TSDataType> dataTypes = new ArrayList<>();
+          for (int columnNum = 0; columnNum < block.getValueColumnCount(); columnNum++) {
+            Column[] valueColumns = block.getValueColumns();
+            switch (valueColumns[i].getDataType()) {
+              case BOOLEAN:
+                dataTypes.add(TSDataType.BOOLEAN);
+                break;
+              case INT32:
+                dataTypes.add(TSDataType.INT32);
+                break;
+              case INT64:
+                dataTypes.add(TSDataType.INT64);
+                break;
+              case FLOAT:
+                dataTypes.add(TSDataType.FLOAT);
+                break;
+              case DOUBLE:
+                dataTypes.add(TSDataType.DOUBLE);
+                break;
+              case TEXT:
+                dataTypes.add(TSDataType.TEXT);
+                break;
+              default:
+                throw new UnSupportedDataTypeException(
+                    "Unknown datatype: " + valueColumns[i].getDataType());
+            }
+          }
+          TsBlockBuilder resultBuilder = new TsBlockBuilder(dataTypes);
+
+          // 用bloomfilter检验并构造新block
+          TimeColumnBuilder timeColumnBuilder = resultBuilder.getTimeColumnBuilder();
+          ArrayList<Integer> timeIndexArray = new ArrayList<>();
+          for (int pos = 0; pos < block.getPositionCount(); pos++) {
+            long time = block.getTimeByIndex(pos);
+            if (filter.contains(String.valueOf(time))) {
+              timeColumnBuilder.writeLong(time);
+              resultBuilder.declarePosition();
+              timeIndexArray.add(pos);
+            }
+          }
+          buildValueColumns(block, timeIndexArray);
+
+          resultBlock = resultBuilder.build();
+          resultBuilder.reset();
+          inputBlocksAfterProcess.add(resultBlock);
+        }
+      }
+      // TODO: 测试一下构造的新block是否正确（所有能join上的都要在block内，join不上的无所谓）。可以考虑构造一些时间序列数据（尽量越多越好）在这输出一下看看。
+      // 发送到云端
+      if(!sinkHandle.isAborted()){
+        sinkHandle.send(resultBlock);//发送数据
+      }
+      while(sinkHandle.getChannel(0).getNumOfBufferedTsBlocks()!=0){//防止有数据没有发送完就关闭通道
+        try {
+          Thread.sleep(10);//时间
+        } catch (InterruptedException e) {
+          throw new RuntimeException(e);
+        }
+      }
+      sinkHandle.setNoMoreTsBlocksOfOneChannel(0);//关闭
+      sinkHandle.close();
+//      if(rev_tsblock==null& !Isrev){
+//        Isrev=true;
+//        // TODO: 如何发送数据到云端
+//        ReceiveTsBlock receive=new ReceiveTsBlock();
+//        rev_tsblock= receive.receive();
+//        finish_rev=true;
+//      }
+//      while(!finish_rev){
+//        Thread.sleep(10);
+//      }
+
+
+//      if(seriesScanUtil.dataType== TSDataType.BOOLEAN){
+//        appendToBuilder(rev_tsblock);
+//        flag_boolean=true;
+//        flag_boolean=true;
+//      }else{
+//        appendToBuilder1(rev_tsblock);
+//        flag_binary=true;
+//        finish_binary=true;
+//      }
+//
+//      if(flag_boolean==true&flag_binary==true){
+//        rev_tsblock=null;
+//        Isrev=false;
+//        finish_rev=false;
+//        finish_binary=false;
+//        flag_boolean=false;
+//      }
+    }
+
 
     // still have time
     if (System.nanoTime() - start < maxRuntime) {
@@ -161,6 +414,32 @@ public class InnerTimeJoinOperator implements ProcessOperator {
     TsBlock res = resultBuilder.build();
     resultBuilder.reset();
     return res;
+  }
+
+  /**
+   * for rebuild tsblock after filter
+   *
+   * @param block
+   * @param timeIndexArray
+   */
+  private void buildValueColumns(TsBlock block, ArrayList<Integer> timeIndexArray) {
+    for (int i = 0; i < block.getValueColumnCount(); i++) {
+      ColumnBuilder columnBuilder = resultBuilder.getColumnBuilder(i);
+      Column column = block.getColumn(i);
+      if (column.mayHaveNull()) {
+        for (int rowIndex : timeIndexArray) {
+          if (column.isNull(rowIndex)) {
+            columnBuilder.appendNull();
+          } else {
+            columnBuilder.write(column, rowIndex);
+          }
+        }
+      } else {
+        for (int rowIndex : timeIndexArray) {
+          columnBuilder.write(column, rowIndex);
+        }
+      }
+    }
   }
 
   // return selected row index for each child's tsblock
