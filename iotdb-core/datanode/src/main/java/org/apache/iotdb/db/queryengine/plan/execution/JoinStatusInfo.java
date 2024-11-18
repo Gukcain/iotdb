@@ -1,8 +1,8 @@
 package org.apache.iotdb.db.queryengine.plan.execution;
 
-public class JoinStatusInfo extends OperatorStatusInfo{
+public class JoinStatusInfo extends OperatorStatusInfo {
 
-    JoinStatusInfo(int sourceId, int edgeSendFragmentId, int edgeRecFragmentId) {
-        super(sourceId, edgeSendFragmentId, edgeRecFragmentId);
-    }
+  JoinStatusInfo(int sourceId, int edgeFragmentId) {
+    super(sourceId, edgeFragmentId);
+  }
 }

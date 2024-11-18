@@ -20,12 +20,11 @@
 package org.apache.iotdb.db.queryengine.execution.operator.process.join;
 
 import org.apache.iotdb.common.rpc.thrift.TEndPoint;
-import org.apache.iotdb.commons.path.PartialPath;
 import org.apache.iotdb.db.queryengine.execution.exchange.MPPDataExchangeManager;
 import org.apache.iotdb.db.queryengine.execution.exchange.MPPDataExchangeService;
-import org.apache.iotdb.db.queryengine.execution.exchange.sink.ISinkHandle;
 import org.apache.iotdb.db.queryengine.execution.exchange.sink.DownStreamChannelIndex;
 import org.apache.iotdb.db.queryengine.execution.exchange.sink.DownStreamChannelLocation;
+import org.apache.iotdb.db.queryengine.execution.exchange.sink.ISinkHandle;
 import org.apache.iotdb.db.queryengine.execution.exchange.sink.ShuffleSinkHandle;
 import org.apache.iotdb.db.queryengine.execution.exchange.source.ISourceHandle;
 import org.apache.iotdb.db.queryengine.execution.fragment.FragmentInstanceContext;
@@ -33,13 +32,11 @@ import org.apache.iotdb.db.queryengine.execution.operator.Operator;
 import org.apache.iotdb.db.queryengine.execution.operator.OperatorContext;
 import org.apache.iotdb.db.queryengine.execution.operator.process.ProcessOperator;
 import org.apache.iotdb.db.queryengine.execution.operator.process.join.merge.TimeComparator;
+import org.apache.iotdb.db.queryengine.execution.operator.source.SeriesScanUtil;
 import org.apache.iotdb.db.queryengine.plan.execution.CloudEdgeCollaborativeFlag;
 import org.apache.iotdb.db.queryengine.plan.execution.PipeInfo;
-import org.apache.iotdb.db.queryengine.plan.execution.ReceiveTsBlock;
 import org.apache.iotdb.db.queryengine.plan.planner.plan.node.PlanNodeId;
 import org.apache.iotdb.db.queryengine.plan.planner.plan.parameter.InputLocation;
-import org.apache.iotdb.db.queryengine.plan.planner.plan.parameter.SeriesScanOptions;
-import org.apache.iotdb.db.queryengine.plan.statement.component.Ordering;
 import org.apache.iotdb.mpp.rpc.thrift.TFragmentInstanceId;
 import org.apache.iotdb.tsfile.common.conf.TSFileDescriptor;
 import org.apache.iotdb.tsfile.exception.write.UnSupportedDataTypeException;
@@ -91,28 +88,26 @@ public class InnerTimeJoinOperator implements ProcessOperator {
   /** Indicate whether we found an empty child input in one loop */
   private boolean hasEmptyChildInput = false;
 
-  private boolean flag_boolean=false;
-  private boolean flag_binary=false;
-  private static TsBlock rev_tsblock=null;
+  private boolean flag_boolean = false;
+  private boolean flag_binary = false;
+  private static TsBlock rev_tsblock = null;
   private static Boolean Isrev = false;
-  private static Boolean finish_rev =false;
-  private static boolean finish_boolean=false;
-  private static boolean finish_binary=false;
+  private static Boolean finish_rev = false;
+  private static boolean finish_boolean = false;
+  private static boolean finish_binary = false;
 
+  private boolean finished;
   private PlanNodeId localPlanNode;
-  private int edge_rec_fragmentId;   // to receive remote fragement
-  private int offset=0;
+  private int edgeFragmentId; // to receive remote fragement
+  private int offset = 0;
   private static final MPPDataExchangeManager MPP_DATA_EXCHANGE_MANAGER =
-          MPPDataExchangeService.getInstance().getMPPDataExchangeManager();
+      MPPDataExchangeService.getInstance().getMPPDataExchangeManager();
   private ISourceHandle sourceHandle;
-//  private SeriesScanOptions.Builder seriesScanBuilder;
-//  private PartialPath seriesPath;
-//  private Ordering scanOrder;
-  private int testflag=0;
-  private int CloudFragmentId=0;
-  private int edge_send_fragmentId;  // to send fragment(block processed with bloomfilter) from
-//  private static final MPPDataExchangeManager MPP_DATA_EXCHANGE_MANAGER =
-//          MPPDataExchangeService.getInstance().getMPPDataExchangeManager();
+  //  private SeriesScanOptions.Builder seriesScanBuilder;
+  //  private PartialPath seriesPath;
+  //  private Ordering scanOrder;
+  private int testflag = 0;
+  private int cloudFragmentId = 0;
   private ISinkHandle sinkHandle;
 
   public InnerTimeJoinOperator(
@@ -135,26 +130,24 @@ public class InnerTimeJoinOperator implements ProcessOperator {
   }
 
   public InnerTimeJoinOperator(
-          OperatorContext operatorContext,
-          List<Operator> children,
-          List<TSDataType> dataTypes,
-          TimeComparator comparator,
-          Map<InputLocation, Integer> outputColumnMap,
-          int rec_fragmentId,
-          int send_fragment) {
+      OperatorContext operatorContext,
+      List<Operator> children,
+      List<TSDataType> dataTypes,
+      TimeComparator comparator,
+      Map<InputLocation, Integer> outputColumnMap,
+      int fragmentId) {
     this.operatorContext = operatorContext;
     this.children = children;
     this.inputOperatorsCount = children.size();
     this.inputTsBlocks = new TsBlock[inputOperatorsCount];
     this.canCallNext = new boolean[inputOperatorsCount];
     checkArgument(
-            children.size() > 1, "child size of InnerTimeJoinOperator should be larger than 1");
+        children.size() > 1, "child size of InnerTimeJoinOperator should be larger than 1");
     this.inputIndex = new int[this.inputOperatorsCount];
     this.resultBuilder = new TsBlockBuilder(dataTypes);
     this.comparator = comparator;
     this.outputColumnMap = outputColumnMap;
-    this.edge_rec_fragmentId = rec_fragmentId;
-    this.edge_send_fragmentId = send_fragment;
+    this.edgeFragmentId = fragmentId;
     this.localPlanNode = operatorContext.getPlanNodeId();
   }
 
@@ -184,23 +177,48 @@ public class InnerTimeJoinOperator implements ProcessOperator {
         : successfulAsList(listenableFutures);
   }
 
-  public void createSourceHandle(){
+  public void createSourceHandle() {
     // source
     System.out.println("---in---");
-    System.out.println("---localfragmentid:"+edge_rec_fragmentId);
-    System.out.println("remote:"+PipeInfo.getInstance().getJoinStatus(Integer.parseInt(localPlanNode.getId())).getCloudSendFragmentId());
-    String queryId = "test_query_"+localPlanNode.getId();
+    System.out.println("---localfragmentid:" + edgeFragmentId);
+    System.out.println(
+        "remote:"
+            + PipeInfo.getInstance()
+                .getJoinStatus(Integer.parseInt(localPlanNode.getId()))
+                .getCloudFragmentId());
+    String queryId = "test_query_" + localPlanNode.getId();
     TEndPoint remoteEndpoint = new TEndPoint("localhost", 10740);
-    TFragmentInstanceId remoteFragmentInstanceId = new TFragmentInstanceId(queryId, PipeInfo.getInstance().getJoinStatus(Integer.parseInt(localPlanNode.getId())).getCloudSendFragmentId(), "0");
-    String localPlanNodeId = "receive_test_"+localPlanNode.getId();
-    TFragmentInstanceId localFragmentInstanceId = new TFragmentInstanceId(queryId, edge_rec_fragmentId, "0");
-    long query_num=1;
+    while (PipeInfo.getInstance().getJoinStatus(Integer.parseInt(localPlanNode.getId())).getCloudFragmentId()==PipeInfo.getInstance().getJoinStatus(Integer.parseInt(localPlanNode.getId())).getOldFragmentId() && PipeInfo.getInstance().getJoinStatus(Integer.parseInt(localPlanNode.getId())).isStatus()){
+      try {     // 如果这次和上次的cloud fragmentId一样说明此时新的cloud fragmentId还没发送过来 等待
+        Thread.sleep(10);
+        System.out.println("waiting");
+      } catch (InterruptedException e) {
+        throw new RuntimeException(e);
+      }
+    }
+    cloudFragmentId=PipeInfo.getInstance().getJoinStatus(Integer.parseInt(localPlanNode.getId())).getCloudFragmentId();
+    TFragmentInstanceId remoteFragmentInstanceId =
+        new TFragmentInstanceId(
+            queryId,
+            PipeInfo.getInstance()
+                .getJoinStatus(Integer.parseInt(localPlanNode.getId()))
+                .getCloudFragmentId(),
+            "0");
+    String localPlanNodeId = "receive_test_" + localPlanNode.getId();
+    TFragmentInstanceId localFragmentInstanceId =
+        new TFragmentInstanceId(queryId, edgeFragmentId, "0");
+    long query_num = 1;
     FragmentInstanceContext instanceContext = new FragmentInstanceContext(query_num);
-    System.out.println("cloudid:"+PipeInfo.getInstance().getJoinStatus(Integer.parseInt(localPlanNode.getId())).getCloudSendFragmentId());
-    this.sourceHandle =MPP_DATA_EXCHANGE_MANAGER.createSourceHandle(
+    System.out.println(
+        "cloudid:"
+            + PipeInfo.getInstance()
+                .getJoinStatus(Integer.parseInt(localPlanNode.getId()))
+                .getCloudFragmentId());
+    this.sourceHandle =
+        MPP_DATA_EXCHANGE_MANAGER.createSourceHandle(
             localFragmentInstanceId,
             localPlanNodeId,
-            0,//IndexOfUpstreamSinkHandle
+            0, // IndexOfUpstreamSinkHandle
             remoteEndpoint,
             remoteFragmentInstanceId,
             instanceContext::failed);
@@ -208,35 +226,41 @@ public class InnerTimeJoinOperator implements ProcessOperator {
     sourceHandle.setMaxBytesCanReserve(MOCK_TSBLOCK_SIZE);
   }
 
-  public void createSinkHandle(){
+  public void createSinkHandle() {
     // sink
-    final String queryId = "test_query_"+localPlanNode.getId();//一个查询一个id就可以
+    final String queryId = "test_query_" + localPlanNode.getId(); // 一个查询一个id就可以
     final TEndPoint remoteEndpoint = new TEndPoint("localhost", 10744);
-    final TFragmentInstanceId remoteFragmentInstanceId = new TFragmentInstanceId(queryId, PipeInfo.getInstance().getJoinStatus(Integer.parseInt(localPlanNode.getId())).getCloudRecFragmentId(), "0");//fragmentId是int变量 local和remote对应上即可
-    final String remotePlanNodeId = "receive_test_"+localPlanNode.getId();
-    final String localPlanNodeId = "send_test_"+localPlanNode.getId();
-    final TFragmentInstanceId localFragmentInstanceId = new TFragmentInstanceId(queryId, edge_send_fragmentId, "0");
+    final TFragmentInstanceId remoteFragmentInstanceId =
+        new TFragmentInstanceId(
+            queryId,
+            PipeInfo.getInstance()
+                .getJoinStatus(Integer.parseInt(localPlanNode.getId()))
+                .getCloudFragmentId(),
+            "0"); // fragmentId是int变量 local和remote对应上即可
+    final String remotePlanNodeId = "receive_test_" + localPlanNode.getId();
+    final String localPlanNodeId = "send_test_" + localPlanNode.getId();
+    final TFragmentInstanceId localFragmentInstanceId =
+        new TFragmentInstanceId(queryId, edgeFragmentId, "0");
     int channelNum = 1;
-    long query_num=1;
+    long query_num = 1;
     FragmentInstanceContext instanceContext = new FragmentInstanceContext(query_num);
     DownStreamChannelIndex downStreamChannelIndex = new DownStreamChannelIndex(0);
     sinkHandle =
-            MPP_DATA_EXCHANGE_MANAGER.createShuffleSinkHandle(
-                    Collections.singletonList(
-                            new DownStreamChannelLocation(
-                                    remoteEndpoint,
-                                    remoteFragmentInstanceId,
-                                    remotePlanNodeId)),
-                    downStreamChannelIndex,
-                    ShuffleSinkHandle.ShuffleStrategyEnum.PLAIN,
-                    localFragmentInstanceId,
-                    localPlanNodeId,
-                    instanceContext);
-    PipeInfo.getInstance().getJoinStatus(Integer.parseInt(localPlanNode.getId())).setSinkHandle(this.sinkHandle);
-    if(PipeInfo.getInstance().getPipeStatus()){
-      sinkHandle.tryOpenChannel(0);//打开通道
+        MPP_DATA_EXCHANGE_MANAGER.createShuffleSinkHandle(
+            Collections.singletonList(
+                new DownStreamChannelLocation(
+                    remoteEndpoint, remoteFragmentInstanceId, remotePlanNodeId)),
+            downStreamChannelIndex,
+            ShuffleSinkHandle.ShuffleStrategyEnum.PLAIN,
+            localFragmentInstanceId,
+            localPlanNodeId,
+            instanceContext);
+    PipeInfo.getInstance()
+        .getJoinStatus(Integer.parseInt(localPlanNode.getId()))
+        .setSinkHandle(this.sinkHandle);
+    if (PipeInfo.getInstance().getPipeStatus()) {
+      sinkHandle.tryOpenChannel(0); // 打开通道
     }
-
   }
 
   @Override
@@ -247,14 +271,14 @@ public class InnerTimeJoinOperator implements ProcessOperator {
     if (!prepareInput(start, maxRuntime)) {
       return null;
     }
-    PipeInfo pipeInfo=PipeInfo.getInstance();
-    System.out.println("----status:"+pipeInfo.getPipeStatus());
-    if (CloudEdgeCollaborativeFlag.getInstance().cloudEdgeCollaborativeFlag) {
-//      if(pipeInfo.getPipeStatus()){
+    PipeInfo pipeInfo = PipeInfo.getInstance();
+    System.out.println("----status:" + pipeInfo.getPipeStatus());
+//    if (CloudEdgeCollaborativeFlag.getInstance().cloudEdgeCollaborativeFlag) {
+    if(pipeInfo.getPipeStatus()){
       // 构建pipeline的sourceHandle和sinkHandle
       createSinkHandle();
       createSourceHandle();
-
+      PipeInfo.getInstance().getJoinStatus(Integer.parseInt(localPlanNode.getId())).setOldFragmentId(cloudFragmentId);    // TODO: 正确吗?
       // 布隆过滤器处理构造新块
       TsBlock resultBlock = null;
       TsBlock bloomFilterReference = null;
@@ -334,49 +358,53 @@ public class InnerTimeJoinOperator implements ProcessOperator {
       }
       // TODO: 测试一下构造的新block是否正确（所有能join上的都要在block内，join不上的无所谓）。可以考虑构造一些时间序列数据（尽量越多越好）在这输出一下看看。
       // 发送到云端
-      if(!sinkHandle.isAborted()){
-        sinkHandle.send(resultBlock);//发送数据
+      if (!sinkHandle.isAborted()) {
+        for(TsBlock block : inputBlocksAfterProcess) {
+          sinkHandle.send(block); // 发送数据
+        }
       }
-      while(sinkHandle.getChannel(0).getNumOfBufferedTsBlocks()!=0){//防止有数据没有发送完就关闭通道
+      while (sinkHandle.getChannel(0).getNumOfBufferedTsBlocks() != 0) { // 防止有数据没有发送完就关闭通道
         try {
-          Thread.sleep(10);//时间
+          Thread.sleep(10); // 时间
         } catch (InterruptedException e) {
           throw new RuntimeException(e);
         }
       }
-      sinkHandle.setNoMoreTsBlocksOfOneChannel(0);//关闭
+      sinkHandle.setNoMoreTsBlocksOfOneChannel(0); // 关闭
       sinkHandle.close();
-//      if(rev_tsblock==null& !Isrev){
-//        Isrev=true;
-//        // TODO: 如何发送数据到云端
-//        ReceiveTsBlock receive=new ReceiveTsBlock();
-//        rev_tsblock= receive.receive();
-//        finish_rev=true;
-//      }
-//      while(!finish_rev){
-//        Thread.sleep(10);
-//      }
 
+      ListenableFuture<?> isBlocked = sourceHandle.isBlocked();
+      while (!isBlocked.isDone()&&!sourceHandle.isFinished()) {
+        try {
+          Thread.sleep(10);
+          System.out.println("waiting");
+        } catch (InterruptedException e) {
+          throw new RuntimeException(e);
+        }
+      }
+      TsBlock tsBlock_rev = null;
+      if (!sourceHandle.isFinished()) {
+        tsBlock_rev = sourceHandle.receive();
+        return tsBlock_rev;
+        // 返回的应该就是可用结果？
+//        appendToBuilder(tsBlock_rev);
+      }else{
+        if(pipeInfo.getPipeStatus()){   // TODO:这种情况说明cloud端有代码控制pipeStatus 在哪？
+          //还在启动，说明是传完了
+          finished=true;
+          pipeInfo.getScanStatus(Integer.parseInt(localPlanNode.getId())).setStatus(false);
+          sourceHandle=null;
+          return tsBlock_rev;
+        }else{
+          // 出问题了 之前的操作都舍弃，运行后面的代码正常在本地join
+          pipeInfo.getScanStatus(Integer.parseInt(localPlanNode.getId())).setStatus(false);
+          pipeInfo.getScanStatus(Integer.parseInt(localPlanNode.getId())).setSetOffset(false);    // 没用
+          sourceHandle=null;
+        }
 
-//      if(seriesScanUtil.dataType== TSDataType.BOOLEAN){
-//        appendToBuilder(rev_tsblock);
-//        flag_boolean=true;
-//        flag_boolean=true;
-//      }else{
-//        appendToBuilder1(rev_tsblock);
-//        flag_binary=true;
-//        finish_binary=true;
-//      }
-//
-//      if(flag_boolean==true&flag_binary==true){
-//        rev_tsblock=null;
-//        Isrev=false;
-//        finish_rev=false;
-//        finish_binary=false;
-//        flag_boolean=false;
-//      }
+      }
+
     }
-
 
     // still have time
     if (System.nanoTime() - start < maxRuntime) {
@@ -611,6 +639,11 @@ public class InnerTimeJoinOperator implements ProcessOperator {
 
   @Override
   public boolean hasNext() throws Exception {
+    if(PipeInfo.getInstance().getPipeStatus() && PipeInfo.getInstance().getJoinStatus(Integer.parseInt(localPlanNode.getId())).isStatus()) {
+      if (sourceHandle != null && !sourceHandle.isFinished()) {   // pipe开着 返回true  TODO:是否有必要？
+        return true;
+      }
+    }
     // return false if any child is consumed up.
     for (int i = 0; i < inputOperatorsCount; i++) {
       if (isEmpty(i) && canCallNext[i] && !children.get(i).hasNextWithTimer()) {

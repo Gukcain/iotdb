@@ -2178,14 +2178,19 @@ public class OperatorTreeGenerator extends PlanVisitor<Operator, LocalExecutionP
             ? getOutputColumnTypesOfTimeJoinNode(node)
             : getOutputColumnTypes(node, context.getTypeProvider());
 
-//    return new InnerTimeJoinOperator(
-//        operatorContext, children, outputColumnTypes, timeComparator, getOutputColumnMap(node));
-    PipeInfo pipeInfo=PipeInfo.getInstance();//单例
-    int rec_fragmentId=pipeInfo.getRecFragmentId();
-    int send_fragmentId=pipeInfo.getSendFragmentId();
-    pipeInfo.addJoinSatus(Integer.parseInt(node.getPlanNodeId().getId()),send_fragmentId,rec_fragmentId);
+    //    return new InnerTimeJoinOperator(
+    //        operatorContext, children, outputColumnTypes, timeComparator,
+    // getOutputColumnMap(node));
+    PipeInfo pipeInfo = PipeInfo.getInstance(); // 单例
+    int fragmentId = pipeInfo.getFragmentId();
+    pipeInfo.addJoinSatus(Integer.parseInt(node.getPlanNodeId().getId()), fragmentId);
     return new InnerTimeJoinOperator(
-            operatorContext, children, outputColumnTypes, timeComparator, getOutputColumnMap(node), rec_fragmentId, send_fragmentId);
+        operatorContext,
+        children,
+        outputColumnTypes,
+        timeComparator,
+        getOutputColumnMap(node),
+        fragmentId);
   }
 
   private Map<InputLocation, Integer> getOutputColumnMap(InnerTimeJoinNode innerTimeJoinNode) {
