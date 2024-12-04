@@ -74,6 +74,7 @@ import org.apache.iotdb.db.queryengine.plan.analyze.schema.ClusterSchemaFetcher;
 import org.apache.iotdb.db.queryengine.plan.analyze.schema.ISchemaFetcher;
 import org.apache.iotdb.db.queryengine.plan.execution.ExecutionResult;
 import org.apache.iotdb.db.queryengine.plan.execution.IQueryExecution;
+import org.apache.iotdb.db.queryengine.plan.execution.PipeInfo;
 import org.apache.iotdb.db.queryengine.plan.parser.ASTVisitor;
 import org.apache.iotdb.db.queryengine.plan.parser.StatementGenerator;
 import org.apache.iotdb.db.queryengine.plan.planner.plan.node.PlanNodeId;
@@ -2738,5 +2739,75 @@ public class ClientRPCServiceImpl implements IClientRPCServiceWithHandler {
     PipeAgent.receiver().thrift().handleClientExit();
     PipeAgent.receiver().legacy().handleClientExit();
     SubscriptionAgent.receiver().handleClientExit();
+  }
+
+  public void excuteIdentitySql(String sql) {
+
+    //    long queryId = Long.MIN_VALUE;
+    long queryId = 10L;
+    Throwable t = null;
+
+    try {
+      Statement s = StatementGenerator.createStatement(sql, ZoneId.systemDefault());
+      SessionInfo sessionInfo = new SessionInfo(1L, "root", ZoneId.systemDefault());
+      if (s == null) {
+        return;
+      }
+      //      queryId = SESSION_MANAGER.requestQueryId(clientSession, 10086L);
+      // create and cache dataset
+      ExecutionResult result =
+          COORDINATOR.executeForTreeModel(
+              s,
+              queryId,
+              //                      SESSION_MANAGER.getSessionInfo(clientSession),
+              sessionInfo,
+              sql,
+              partitionFetcher,
+              schemaFetcher,
+              1000000000);
+
+      if (result.status.code != TSStatusCode.SUCCESS_STATUS.getStatusCode()
+          && result.status.code != TSStatusCode.REDIRECTION_RECOMMEND.getStatusCode()) {
+        return;
+      }
+
+      IQueryExecution queryExecution = COORDINATOR.getQueryExecution(queryId);
+      while (queryExecution.hasNextResult()) {
+        Optional<TsBlock> tsBlock;
+
+        try {
+          tsBlock = queryExecution.getBatchResult(); // 获取查询结果
+        } catch (IoTDBException e) {
+          throw new RuntimeException("Fetch Schema failed. ", e);
+        }
+        if (!tsBlock.isPresent() || tsBlock.get().isEmpty()) {
+          break;
+        }
+        //
+        //        Column[] valueColumns = tsBlock.get().getValueColumns();
+        //        System.out.println("receive columns boolean:");
+        //        boolean[] booleanColumn=valueColumns[0].getBooleans();
+        //        for(boolean booleanObject:booleanColumn){
+        //          System.out.println(booleanObject);
+        //        }
+        //        System.out.println("receive columns binary:");
+        //        Binary[] binaryColumn=valueColumns[0].getBinaries();
+        //        for(Binary binaryObject:binaryColumn){
+        //          System.out.println(binaryObject);
+        //        }
+        //        TimeColumn timeColumn=tsBlock.get().getTimeColumn();
+        //        long[] times=timeColumn.getTimes();
+        //        System.out.println("receive time columns:");
+        //        for(long time:times){
+        //          System.out.println(time);
+        //        }
+      }
+
+    } catch (RuntimeException e) {
+      throw new RuntimeException(e);
+    } finally {
+      COORDINATOR.cleanupQueryExecution(queryId);
+      PipeInfo.getInstance().setPipeStatus(false);
+    }
   }
 }

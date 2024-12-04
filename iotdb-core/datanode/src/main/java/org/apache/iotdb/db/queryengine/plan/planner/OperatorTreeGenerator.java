@@ -148,6 +148,7 @@ import org.apache.iotdb.db.queryengine.plan.analyze.PredicateUtils;
 import org.apache.iotdb.db.queryengine.plan.analyze.TemplatedInfo;
 import org.apache.iotdb.db.queryengine.plan.analyze.TypeProvider;
 import org.apache.iotdb.db.queryengine.plan.analyze.cache.schema.DataNodeSchemaCache;
+import org.apache.iotdb.db.queryengine.plan.execution.PipeInfo;
 import org.apache.iotdb.db.queryengine.plan.expression.Expression;
 import org.apache.iotdb.db.queryengine.plan.expression.ExpressionFactory;
 import org.apache.iotdb.db.queryengine.plan.expression.leaf.TimeSeriesOperand;
@@ -243,6 +244,7 @@ import org.apache.iotdb.db.utils.columngenerator.ColumnGeneratorType;
 import org.apache.iotdb.db.utils.columngenerator.SlidingTimeColumnGenerator;
 import org.apache.iotdb.db.utils.columngenerator.parameter.ColumnGeneratorParameter;
 import org.apache.iotdb.db.utils.columngenerator.parameter.SlidingTimeColumnGeneratorParameter;
+import org.apache.iotdb.db.zcy.service.PipeEtoCService;
 import org.apache.iotdb.tsfile.common.conf.TSFileDescriptor;
 import org.apache.iotdb.tsfile.file.metadata.enums.TSDataType;
 import org.apache.iotdb.tsfile.read.TimeValuePair;
@@ -258,6 +260,12 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.Validate;
+import org.apache.thrift.TException;
+import org.apache.thrift.protocol.TBinaryProtocol;
+import org.apache.thrift.protocol.TProtocol;
+import org.apache.thrift.transport.TSocket;
+import org.apache.thrift.transport.TTransport;
+import org.apache.thrift.transport.layered.TFramedTransport;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -2177,8 +2185,52 @@ public class OperatorTreeGenerator extends PlanVisitor<Operator, LocalExecutionP
             ? getOutputColumnTypesOfTimeJoinNode(node)
             : getOutputColumnTypes(node, context.getTypeProvider());
 
+    PipeInfo pipeInfo = PipeInfo.getInstance();
+    int fragmentId = pipeInfo.getFragmentId();
+    int sourceId = Integer.parseInt(node.getPlanNodeId().getId());
+    pipeInfo.addJoinSatus(sourceId, fragmentId); // 添加到表
+    if (pipeInfo.getPipeStatus()) {
+      ackSend(fragmentId, sourceId);
+      while (!pipeInfo.getJoinStatus(sourceId).getStatus()) { // 跳出说明接收到修改信号
+        try {
+          Thread.sleep(10);
+        } catch (InterruptedException e) {
+          throw new RuntimeException(e);
+        }
+      }
+    }
+
+    //    return new InnerTimeJoinOperator(
+    //        operatorContext, children, outputColumnTypes, timeComparator,
+    // getOutputColumnMap(node));
     return new InnerTimeJoinOperator(
-        operatorContext, children, outputColumnTypes, timeComparator, getOutputColumnMap(node));
+        operatorContext,
+        children,
+        outputColumnTypes,
+        timeComparator,
+        getOutputColumnMap(node),
+        fragmentId);
+  }
+
+  public void ackSend(int fragmentId, int sourceId) {
+    // 多线程非阻塞版本
+    TTransport transport = null;
+    try {
+      transport = new TFramedTransport(new TSocket("localhost", 9090));
+      TProtocol protocol = new TBinaryProtocol(transport);
+      PipeEtoCService.Client client = new PipeEtoCService.Client(protocol);
+      transport.open();
+      // 调用服务方法
+      client.AckMessage(fragmentId, sourceId);
+      System.out.println("ackData:" + sourceId + " sent successfully.");
+
+    } catch (TException x) {
+      x.printStackTrace();
+    } finally {
+      if (null != transport) {
+        transport.close();
+      }
+    }
   }
 
   private Map<InputLocation, Integer> getOutputColumnMap(InnerTimeJoinNode innerTimeJoinNode) {
