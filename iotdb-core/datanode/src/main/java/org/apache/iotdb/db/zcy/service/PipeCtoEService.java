@@ -96,6 +96,12 @@ public class PipeCtoEService {
       recv_AnsMessage();
     }
 
+    //    public void AnsMessage(int EdgeFragmentId, int SourceId, boolean HasNext)
+    //        throws org.apache.thrift.TException {
+    //      send_AnsMessage(EdgeFragmentId, SourceId, HasNext);
+    //      recv_AnsMessage();
+    //    }
+
     public void send_AnsMessage(int EdgeFragmentId, int SourceId, int ReadOffset)
         throws org.apache.thrift.TException {
       AnsMessage_args args = new AnsMessage_args();

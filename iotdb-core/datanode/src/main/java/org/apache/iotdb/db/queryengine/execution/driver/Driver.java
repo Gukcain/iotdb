@@ -39,6 +39,8 @@ import org.slf4j.LoggerFactory;
 import javax.annotation.concurrent.GuardedBy;
 
 import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -234,6 +236,11 @@ public abstract class Driver implements IDriver {
       blocked = sink.isFull();
       if (!blocked.isDone()) {
         return blocked;
+      }
+      try (FileWriter writer = new FileWriter("OperatorTest.txt", true)) {
+        writer.write("Next:\t" + root.getClass().getName()+ "\t" + System.identityHashCode(root) + "\n"); // 将字符串写入文件
+      } catch (IOException e) {
+        System.out.println("发生错误：" + e.getMessage());
       }
       if (root.hasNextWithTimer()) {
         TsBlock tsBlock = root.nextWithTimer();

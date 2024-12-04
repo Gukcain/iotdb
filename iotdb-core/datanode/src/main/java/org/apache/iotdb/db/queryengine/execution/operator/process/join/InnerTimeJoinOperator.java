@@ -32,8 +32,6 @@ import org.apache.iotdb.db.queryengine.execution.operator.Operator;
 import org.apache.iotdb.db.queryengine.execution.operator.OperatorContext;
 import org.apache.iotdb.db.queryengine.execution.operator.process.ProcessOperator;
 import org.apache.iotdb.db.queryengine.execution.operator.process.join.merge.TimeComparator;
-import org.apache.iotdb.db.queryengine.execution.operator.source.SeriesScanUtil;
-import org.apache.iotdb.db.queryengine.plan.execution.CloudEdgeCollaborativeFlag;
 import org.apache.iotdb.db.queryengine.plan.execution.PipeInfo;
 import org.apache.iotdb.db.queryengine.plan.planner.plan.node.PlanNodeId;
 import org.apache.iotdb.db.queryengine.plan.planner.plan.parameter.InputLocation;
@@ -50,6 +48,8 @@ import org.apache.iotdb.tsfile.utils.BloomFilter;
 
 import com.google.common.util.concurrent.ListenableFuture;
 
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -103,12 +103,10 @@ public class InnerTimeJoinOperator implements ProcessOperator {
   private static final MPPDataExchangeManager MPP_DATA_EXCHANGE_MANAGER =
       MPPDataExchangeService.getInstance().getMPPDataExchangeManager();
   private ISourceHandle sourceHandle;
-  //  private SeriesScanOptions.Builder seriesScanBuilder;
-  //  private PartialPath seriesPath;
-  //  private Ordering scanOrder;
   private int testflag = 0;
   private int cloudFragmentId = 0;
   private ISinkHandle sinkHandle;
+  private boolean hasHandles = false;
 
   public InnerTimeJoinOperator(
       OperatorContext operatorContext,
@@ -188,15 +186,26 @@ public class InnerTimeJoinOperator implements ProcessOperator {
                 .getCloudFragmentId());
     String queryId = "test_query_" + localPlanNode.getId();
     TEndPoint remoteEndpoint = new TEndPoint("localhost", 10740);
-    while (PipeInfo.getInstance().getJoinStatus(Integer.parseInt(localPlanNode.getId())).getCloudFragmentId()==PipeInfo.getInstance().getJoinStatus(Integer.parseInt(localPlanNode.getId())).getOldFragmentId() && PipeInfo.getInstance().getJoinStatus(Integer.parseInt(localPlanNode.getId())).isStatus()){
-      try {     // 如果这次和上次的cloud fragmentId一样说明此时新的cloud fragmentId还没发送过来 等待
+    while (PipeInfo.getInstance()
+                .getJoinStatus(Integer.parseInt(localPlanNode.getId()))
+                .getCloudFragmentId()
+            == PipeInfo.getInstance()
+                .getJoinStatus(Integer.parseInt(localPlanNode.getId()))
+                .getOldFragmentId()
+        && PipeInfo.getInstance()
+            .getJoinStatus(Integer.parseInt(localPlanNode.getId()))
+            .getStatus()) {
+      try { // 如果这次和上次的cloud fragmentId一样说明此时新的cloud fragmentId还没发送过来 等待
         Thread.sleep(10);
         System.out.println("waiting");
       } catch (InterruptedException e) {
         throw new RuntimeException(e);
       }
     }
-    cloudFragmentId=PipeInfo.getInstance().getJoinStatus(Integer.parseInt(localPlanNode.getId())).getCloudFragmentId();
+    cloudFragmentId =
+        PipeInfo.getInstance()
+            .getJoinStatus(Integer.parseInt(localPlanNode.getId()))
+            .getCloudFragmentId();
     TFragmentInstanceId remoteFragmentInstanceId =
         new TFragmentInstanceId(
             queryId,
@@ -229,7 +238,7 @@ public class InnerTimeJoinOperator implements ProcessOperator {
   public void createSinkHandle() {
     // sink
     final String queryId = "test_query_" + localPlanNode.getId(); // 一个查询一个id就可以
-    final TEndPoint remoteEndpoint = new TEndPoint("localhost", 10744);
+    final TEndPoint remoteEndpoint = new TEndPoint("localhost", 10740);
     final TFragmentInstanceId remoteFragmentInstanceId =
         new TFragmentInstanceId(
             queryId,
@@ -257,7 +266,7 @@ public class InnerTimeJoinOperator implements ProcessOperator {
             instanceContext);
     PipeInfo.getInstance()
         .getJoinStatus(Integer.parseInt(localPlanNode.getId()))
-        .setSinkHandle(this.sinkHandle);
+        .setEToCSinkHandle(this.sinkHandle);
     if (PipeInfo.getInstance().getPipeStatus()) {
       sinkHandle.tryOpenChannel(0); // 打开通道
     }
@@ -265,6 +274,13 @@ public class InnerTimeJoinOperator implements ProcessOperator {
 
   @Override
   public TsBlock next() throws Exception {
+    int addressHash = System.identityHashCode(this);
+    try (FileWriter writer = new FileWriter("InnerJoinTest.txt", true)) {
+      writer.write("Next:\t" + addressHash + "\n"); // 将字符串写入文件
+    } catch (IOException e) {
+      System.out.println("发生错误：" + e.getMessage());
+    }
+    System.out.println("Join Next()");
     // start stopwatch
     long maxRuntime = operatorContext.getMaxRunTime().roundTo(TimeUnit.NANOSECONDS);
     long start = System.nanoTime();
@@ -273,12 +289,20 @@ public class InnerTimeJoinOperator implements ProcessOperator {
     }
     PipeInfo pipeInfo = PipeInfo.getInstance();
     System.out.println("----status:" + pipeInfo.getPipeStatus());
-//    if (CloudEdgeCollaborativeFlag.getInstance().cloudEdgeCollaborativeFlag) {
-    if(pipeInfo.getPipeStatus()){
+    pipeInfo.setPipeStatus(true);
+    System.out.println("----For Test: Set status: " + pipeInfo.getPipeStatus());
+    //    if (CloudEdgeCollaborativeFlag.getInstance().cloudEdgeCollaborativeFlag) {
+    if (pipeInfo.getPipeStatus()) {
       // 构建pipeline的sourceHandle和sinkHandle
-      createSinkHandle();
-      createSourceHandle();
-      PipeInfo.getInstance().getJoinStatus(Integer.parseInt(localPlanNode.getId())).setOldFragmentId(cloudFragmentId);    // TODO: 正确吗?
+      if(!hasHandles){
+        createSinkHandle();
+        createSourceHandle();
+        hasHandles = true;
+      }
+
+      PipeInfo.getInstance()
+          .getJoinStatus(Integer.parseInt(localPlanNode.getId()))
+          .setOldFragmentId(cloudFragmentId); // TODO: 正确吗?
       // 布隆过滤器处理构造新块
       TsBlock resultBlock = null;
       TsBlock bloomFilterReference = null;
@@ -359,8 +383,8 @@ public class InnerTimeJoinOperator implements ProcessOperator {
       // TODO: 测试一下构造的新block是否正确（所有能join上的都要在block内，join不上的无所谓）。可以考虑构造一些时间序列数据（尽量越多越好）在这输出一下看看。
       // 发送到云端
       if (!sinkHandle.isAborted()) {
-        for(TsBlock block : inputBlocksAfterProcess) {
-          sinkHandle.send(block); // 发送数据
+        for (TsBlock block : inputBlocksAfterProcess) {
+          sinkHandle.send(block); // 发送数据   // TODO: 发送的是一组TsBlock，接收端如何确保正确收到？
         }
       }
       while (sinkHandle.getChannel(0).getNumOfBufferedTsBlocks() != 0) { // 防止有数据没有发送完就关闭通道
@@ -374,7 +398,7 @@ public class InnerTimeJoinOperator implements ProcessOperator {
       sinkHandle.close();
 
       ListenableFuture<?> isBlocked = sourceHandle.isBlocked();
-      while (!isBlocked.isDone()&&!sourceHandle.isFinished()) {
+      while (!isBlocked.isDone() && !sourceHandle.isFinished()) {
         try {
           Thread.sleep(10);
           System.out.println("waiting");
@@ -387,23 +411,21 @@ public class InnerTimeJoinOperator implements ProcessOperator {
         tsBlock_rev = sourceHandle.receive();
         return tsBlock_rev;
         // 返回的应该就是可用结果？
-//        appendToBuilder(tsBlock_rev);
-      }else{
-        if(pipeInfo.getPipeStatus()){   // TODO:这种情况说明cloud端有代码控制pipeStatus 在哪？
-          //还在启动，说明是传完了
-          finished=true;
-          pipeInfo.getScanStatus(Integer.parseInt(localPlanNode.getId())).setStatus(false);
-          sourceHandle=null;
+        //        appendToBuilder(tsBlock_rev);
+      } else {
+        if (pipeInfo.getPipeStatus()) { // TODO:这种情况说明cloud端有代码控制pipeStatus 在哪？
+          // 还在启动，说明是传完了
+          finished = true;
+          pipeInfo.getJoinStatus(Integer.parseInt(localPlanNode.getId())).setStatus(false);
+          sourceHandle = null;
           return tsBlock_rev;
-        }else{
+        } else {
           // 出问题了 之前的操作都舍弃，运行后面的代码正常在本地join
-          pipeInfo.getScanStatus(Integer.parseInt(localPlanNode.getId())).setStatus(false);
-          pipeInfo.getScanStatus(Integer.parseInt(localPlanNode.getId())).setSetOffset(false);    // 没用
-          sourceHandle=null;
+          pipeInfo.getJoinStatus(Integer.parseInt(localPlanNode.getId())).setStatus(false);
+          pipeInfo.getJoinStatus(Integer.parseInt(localPlanNode.getId())).setSetOffset(false); // 没用
+          sourceHandle = null;
         }
-
       }
-
     }
 
     // still have time
@@ -639,8 +661,18 @@ public class InnerTimeJoinOperator implements ProcessOperator {
 
   @Override
   public boolean hasNext() throws Exception {
-    if(PipeInfo.getInstance().getPipeStatus() && PipeInfo.getInstance().getJoinStatus(Integer.parseInt(localPlanNode.getId())).isStatus()) {
-      if (sourceHandle != null && !sourceHandle.isFinished()) {   // pipe开着 返回true  TODO:是否有必要？
+    int addressHash = System.identityHashCode(this);
+    try (FileWriter writer = new FileWriter("InnerJoinTest.txt", true)) {
+      writer.write("HasNext:\t" + addressHash + "\n"); // 将字符串写入文件
+    } catch (IOException e) {
+      System.out.println("发生错误：" + e.getMessage());
+    }
+    System.out.println("Join HasNext()");
+    if (PipeInfo.getInstance().getPipeStatus()
+        && PipeInfo.getInstance()
+            .getJoinStatus(Integer.parseInt(localPlanNode.getId()))
+            .getStatus()) {
+      if (sourceHandle != null && !sourceHandle.isFinished()) { // pipe开着 返回true  TODO:是否有必要？
         return true;
       }
     }

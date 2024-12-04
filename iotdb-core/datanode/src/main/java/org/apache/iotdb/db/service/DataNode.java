@@ -74,6 +74,7 @@ import org.apache.iotdb.db.qp.sql.IoTDBSqlParser;
 import org.apache.iotdb.db.qp.sql.SqlLexer;
 import org.apache.iotdb.db.queryengine.execution.exchange.MPPDataExchangeService;
 import org.apache.iotdb.db.queryengine.execution.schedule.DriverScheduler;
+import org.apache.iotdb.db.queryengine.plan.execution.ServerStart;
 import org.apache.iotdb.db.queryengine.plan.parser.ASTVisitor;
 import org.apache.iotdb.db.queryengine.plan.parser.StatementGenerator;
 import org.apache.iotdb.db.queryengine.plan.planner.LogicalPlanVisitor;
@@ -106,6 +107,7 @@ import org.antlr.v4.runtime.CommonTokenStream;
 import org.apache.thrift.TException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import zyh.service.LoadDetection;
 
 import java.io.File;
 import java.io.IOException;
@@ -180,6 +182,10 @@ public class DataNode implements DataNodeMBean {
   public static void main(String[] args) {
     logger.info("IoTDB-DataNode environment variables: {}", IoTDBConfig.getEnvironmentVariables());
     logger.info("IoTDB-DataNode default charset is: {}", Charset.defaultCharset().displayName());
+
+    Thread serverThread = new Thread(new ServerRunnable());//启动服务器
+    serverThread.start();
+
     new DataNodeServerCommandLine().doMain(args);
   }
 
@@ -1041,5 +1047,59 @@ public class DataNode implements DataNodeMBean {
     private DataNodeHolder() {
       // Empty constructor
     }
+  }
+}
+class ServerRunnable implements Runnable {
+  @Override
+  public void run() {
+    // 创建并启动服务器
+    ServerStart server = new ServerStart();
+    server.start();
+//    PipeInfo pipeInfo=new PipeInfo();
+  }
+}
+class MonitorRunnable implements Runnable {
+  @Override
+  public void run() {
+    LoadDetection pipe = new LoadDetection();
+//    for(int i=20;i>0;i--)
+//    {
+//      try {
+//        Thread.sleep(1000);//时间
+//        System.out.println("waiting start"+i);
+//      } catch (InterruptedException e) {
+//        throw new RuntimeException(e);
+//      }
+//    }
+    pipe.PipeStart();
+//    for(int i=2;i>0;i--)
+//    {
+//      try {
+//        Thread.sleep(1000);//时间
+//        System.out.println("waiting stop"+i);
+//      } catch (InterruptedException e) {
+//        throw new RuntimeException(e);
+//      }
+//    }
+
+    try {
+      Thread.sleep(3000);//时间
+      System.out.println("waiting stop");
+    } catch (InterruptedException e) {
+      throw new RuntimeException(e);
+    }
+
+    pipe.PipeStop();
+    // 启动io监测线程
+//    while(true){
+//      LoadDetection monitor = new LoadDetection();
+//      monitor.monitor();
+//      try {
+//        Thread.sleep(100);
+//      } catch (InterruptedException e) {
+//        throw new RuntimeException(e);
+//      }
+//    }
+
   }
 }

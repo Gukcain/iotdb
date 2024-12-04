@@ -40,11 +40,14 @@ public class ServiceImpl implements PipeEtoCService.Iface {
       transport.open();
       // 调用服务方法
       //
-      // client.AnsMessage(pipeInfo.getScanStatus(SourceId).getEdgeFragmentId(),SourceId,pipeInfo.getScanStatus(SourceId).getOffset());
       client.AnsMessage(
-          pipeInfo.getJoinStatus(SourceId).getEdgeFragmentId(),
+          pipeInfo.getScanStatus(SourceId).getEdgeFragmentId(),
           SourceId,
-          pipeInfo.getJoinStatus(SourceId).getOffset());
+          pipeInfo.getScanStatus(SourceId).getOffset());
+      //      client.AnsMessage(
+      //          pipeInfo.getJoinStatus(SourceId).getEdgeFragmentId(),
+      //          SourceId,
+      //          pipeInfo.getJoinStatus(SourceId).isHasNext());
       System.out.println("ansData:" + SourceId + " sent successfully.");
     } catch (TException x) {
       x.printStackTrace();

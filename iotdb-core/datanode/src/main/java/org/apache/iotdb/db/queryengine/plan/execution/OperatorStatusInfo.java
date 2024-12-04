@@ -15,9 +15,10 @@ public class OperatorStatusInfo {
   private boolean setOffset = false;
   private boolean setStartTime = false;
   private int oldFragmentId = 0;
+  private boolean hasNext = false;
 
   private long startTime = 0; // 起始时间
-  private ISinkHandle sinkHandle;
+  private ISinkHandle EToCSinkHandle;
 
   OperatorStatusInfo(int sourceId, int edgeFragmentId) {
     this.edgeFragmentId = edgeFragmentId;
@@ -48,7 +49,7 @@ public class OperatorStatusInfo {
     return cloudFragmentId;
   }
 
-  public boolean isStatus() {
+  public boolean getStatus() {
     return status;
   }
 
@@ -88,11 +89,19 @@ public class OperatorStatusInfo {
     this.setStartTime = setStartTime;
   }
 
-  public ISinkHandle getSinkHandle() {
-    return sinkHandle;
+  public ISinkHandle getEToCSinkHandle() {
+    return EToCSinkHandle;
   }
 
-  public void setSinkHandle(ISinkHandle sinkHandle) {
-    this.sinkHandle = sinkHandle;
+  public void setEToCSinkHandle(ISinkHandle EToCSinkHandle) {
+    this.EToCSinkHandle = EToCSinkHandle;
+  }
+
+  public boolean isHasNext() {
+    return hasNext;
+  }
+
+  public void setHasNext(boolean hasNext) {
+    this.hasNext = hasNext;
   }
 }
