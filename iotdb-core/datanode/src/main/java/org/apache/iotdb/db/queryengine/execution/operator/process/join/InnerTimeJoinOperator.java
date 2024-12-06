@@ -108,6 +108,8 @@ public class InnerTimeJoinOperator implements ProcessOperator {
   private ISinkHandle sinkHandle;
   private boolean hasHandles = false;
 
+  TsBlockBuilder FilterResultBuilder;
+
   public InnerTimeJoinOperator(
       OperatorContext operatorContext,
       List<Operator> children,
@@ -177,7 +179,7 @@ public class InnerTimeJoinOperator implements ProcessOperator {
 
   public void createSourceHandle() {
     // source
-    System.out.println("---in---");
+    System.out.println("---in create source:---");
     System.out.println("---localfragmentid:" + edgeFragmentId);
     System.out.println(
         "remote:"
@@ -290,6 +292,10 @@ public class InnerTimeJoinOperator implements ProcessOperator {
     PipeInfo pipeInfo = PipeInfo.getInstance();
     System.out.println("----status:" + pipeInfo.getPipeStatus());
     pipeInfo.setPipeStatus(true);
+    pipeInfo.setMonitorFlag(true);
+    while(pipeInfo.getJoinStatus(Integer.parseInt(localPlanNode.getId())).getCloudFragmentId()==0){
+      Thread.sleep(100);
+    }
     System.out.println("----For Test: Set status: " + pipeInfo.getPipeStatus());
     //    if (CloudEdgeCollaborativeFlag.getInstance().cloudEdgeCollaborativeFlag) {
     if (pipeInfo.getPipeStatus()) {
@@ -332,11 +338,15 @@ public class InnerTimeJoinOperator implements ProcessOperator {
           inputBlocksAfterProcess.add(block);
         } else {
           //          children.get(i).getResultBuilder();
-
           List<TSDataType> dataTypes = new ArrayList<>();
+          Column[] valueColumns = block.getValueColumns();
+          try (FileWriter writer = new FileWriter("BuildTest.txt", true)) {
+            writer.write("column number:" + block.getValueColumnCount() + "\n");  // 将字符串写入文件
+          } catch (IOException e) {
+            System.out.println("发生错误：" + e.getMessage());
+          }
           for (int columnNum = 0; columnNum < block.getValueColumnCount(); columnNum++) {
-            Column[] valueColumns = block.getValueColumns();
-            switch (valueColumns[i].getDataType()) {
+            switch (valueColumns[columnNum].getDataType()) {
               case BOOLEAN:
                 dataTypes.add(TSDataType.BOOLEAN);
                 break;
@@ -360,23 +370,28 @@ public class InnerTimeJoinOperator implements ProcessOperator {
                     "Unknown datatype: " + valueColumns[i].getDataType());
             }
           }
-          TsBlockBuilder resultBuilder = new TsBlockBuilder(dataTypes);
+          FilterResultBuilder = new TsBlockBuilder(dataTypes);
 
           // 用bloomfilter检验并构造新block
-          TimeColumnBuilder timeColumnBuilder = resultBuilder.getTimeColumnBuilder();
+          TimeColumnBuilder timeColumnBuilder = FilterResultBuilder.getTimeColumnBuilder();
           ArrayList<Integer> timeIndexArray = new ArrayList<>();
           for (int pos = 0; pos < block.getPositionCount(); pos++) {
             long time = block.getTimeByIndex(pos);
             if (filter.contains(String.valueOf(time))) {
+//              try (FileWriter writer = new FileWriter("BloomFilterTest.txt", true)) {
+//                writer.write(String.valueOf(time)+"\n");  // 将字符串写入文件
+//              } catch (IOException e) {
+//                System.out.println("发生错误：" + e.getMessage());
+//              }
               timeColumnBuilder.writeLong(time);
-              resultBuilder.declarePosition();
+              FilterResultBuilder.declarePosition();
               timeIndexArray.add(pos);
             }
           }
           buildValueColumns(block, timeIndexArray);
 
-          resultBlock = resultBuilder.build();
-          resultBuilder.reset();
+          resultBlock = FilterResultBuilder.build();
+          FilterResultBuilder.reset();
           inputBlocksAfterProcess.add(resultBlock);
         }
       }
@@ -474,7 +489,7 @@ public class InnerTimeJoinOperator implements ProcessOperator {
    */
   private void buildValueColumns(TsBlock block, ArrayList<Integer> timeIndexArray) {
     for (int i = 0; i < block.getValueColumnCount(); i++) {
-      ColumnBuilder columnBuilder = resultBuilder.getColumnBuilder(i);
+      ColumnBuilder columnBuilder = FilterResultBuilder.getColumnBuilder(i);
       Column column = block.getColumn(i);
       if (column.mayHaveNull()) {
         for (int rowIndex : timeIndexArray) {

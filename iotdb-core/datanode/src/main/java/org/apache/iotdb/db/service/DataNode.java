@@ -74,6 +74,7 @@ import org.apache.iotdb.db.qp.sql.IoTDBSqlParser;
 import org.apache.iotdb.db.qp.sql.SqlLexer;
 import org.apache.iotdb.db.queryengine.execution.exchange.MPPDataExchangeService;
 import org.apache.iotdb.db.queryengine.execution.schedule.DriverScheduler;
+import org.apache.iotdb.db.queryengine.plan.execution.PipeInfo;
 import org.apache.iotdb.db.queryengine.plan.execution.ServerStart;
 import org.apache.iotdb.db.queryengine.plan.parser.ASTVisitor;
 import org.apache.iotdb.db.queryengine.plan.parser.StatementGenerator;
@@ -185,6 +186,9 @@ public class DataNode implements DataNodeMBean {
 
     Thread serverThread = new Thread(new ServerRunnable());//启动服务器
     serverThread.start();
+
+    Thread monitorThread = new Thread(new MonitorRunnable());//启动服务器
+    monitorThread.start();
 
     new DataNodeServerCommandLine().doMain(args);
   }
@@ -1059,6 +1063,7 @@ class ServerRunnable implements Runnable {
   }
 }
 class MonitorRunnable implements Runnable {
+
   @Override
   public void run() {
     LoadDetection pipe = new LoadDetection();
@@ -1071,7 +1076,23 @@ class MonitorRunnable implements Runnable {
 //        throw new RuntimeException(e);
 //      }
 //    }
-    pipe.PipeStart();
+    while (true) {
+      // 检查变量
+      if (PipeInfo.getInstance().isMonitorFlag()) {
+        pipe.PipeStart();
+        // 防止重复调用，将标志位重置为 false
+        PipeInfo.getInstance().setMonitorFlag(false);
+      }
+
+      // 防止忙等导致的 CPU 占用过高
+      try {
+        Thread.sleep(100); // 每 100ms 检查一次
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt(); // 恢复线程中断状态
+        break;
+      }
+    }
+
 //    for(int i=2;i>0;i--)
 //    {
 //      try {
@@ -1082,14 +1103,14 @@ class MonitorRunnable implements Runnable {
 //      }
 //    }
 
-    try {
-      Thread.sleep(3000);//时间
-      System.out.println("waiting stop");
-    } catch (InterruptedException e) {
-      throw new RuntimeException(e);
-    }
+//    try {
+//      Thread.sleep(30000);//时间
+//      System.out.println("waiting stop");
+//    } catch (InterruptedException e) {
+//      throw new RuntimeException(e);
+//    }
 
-    pipe.PipeStop();
+//    pipe.PipeStop();
     // 启动io监测线程
 //    while(true){
 //      LoadDetection monitor = new LoadDetection();

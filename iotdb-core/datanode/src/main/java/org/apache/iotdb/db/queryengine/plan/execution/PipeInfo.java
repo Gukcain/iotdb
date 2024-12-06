@@ -14,6 +14,8 @@ public class PipeInfo {
   //    private int edge_send_fragmentId;   // edge侧用bloomfilter处理原始数据后向cloud发送数据的fragment
   private int fragmentId;
   private String sql;
+  // 线程安全的标志变量
+  private volatile boolean monitorFlag = false;
 
   // 私有构造方法，避免外部实例化
   private PipeInfo() {
@@ -89,5 +91,13 @@ public class PipeInfo {
 
   public void setSql(String sql) {
     this.sql = sql;
+  }
+
+  public boolean isMonitorFlag() {
+      return monitorFlag;
+  }
+
+  public void setMonitorFlag(boolean flag) {
+    this.monitorFlag = flag;
   }
 }

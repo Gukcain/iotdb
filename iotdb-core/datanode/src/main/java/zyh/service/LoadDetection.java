@@ -13,6 +13,9 @@ import oshi.SystemInfo;
 import oshi.hardware.HWDiskStore;
 import oshi.hardware.HWPartition;
 
+import java.io.FileWriter;
+import java.io.IOException;
+
 public class LoadDetection {
   private static double getDiskReadSpeed() {
     SystemInfo systemInfo = new SystemInfo();
@@ -181,15 +184,21 @@ public class LoadDetection {
       transport.open();
       // 调用服务方法
       client.PipeStart(PipeInfo.getInstance().getSql());
-      System.out.println("start successfully.");
+      try (FileWriter writer = new FileWriter("sqlTest.txt", true)) {
+        writer.write("PipeStart: "+PipeInfo.getInstance().getSql());  // 将字符串写入文件
+      } catch (IOException e) {
+        System.out.println("发生错误：" + e.getMessage());
+      }
+      System.out.println("----Pipe start successfully.");
 
     } catch (TException x) {
       x.printStackTrace();
+      System.out.println("----Pipe start error.");
     } finally {
       if (null != transport) {
         transport.close();
       }
     }
-    System.out.println("pipe start");
+
   }
 }

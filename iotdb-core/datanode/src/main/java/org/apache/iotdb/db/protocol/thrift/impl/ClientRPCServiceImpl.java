@@ -74,6 +74,7 @@ import org.apache.iotdb.db.queryengine.plan.analyze.schema.ClusterSchemaFetcher;
 import org.apache.iotdb.db.queryengine.plan.analyze.schema.ISchemaFetcher;
 import org.apache.iotdb.db.queryengine.plan.execution.ExecutionResult;
 import org.apache.iotdb.db.queryengine.plan.execution.IQueryExecution;
+import org.apache.iotdb.db.queryengine.plan.execution.PipeInfo;
 import org.apache.iotdb.db.queryengine.plan.parser.ASTVisitor;
 import org.apache.iotdb.db.queryengine.plan.parser.StatementGenerator;
 import org.apache.iotdb.db.queryengine.plan.planner.plan.node.PlanNodeId;
@@ -187,6 +188,7 @@ import org.apache.thrift.TException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.time.ZoneId;
@@ -269,6 +271,13 @@ public class ClientRPCServiceImpl implements IClientRPCServiceWithHandler {
     boolean finished = false;
     long queryId = Long.MIN_VALUE;
     String statement = req.getStatement();
+    PipeInfo pipeInfo=PipeInfo.getInstance();
+    pipeInfo.setSql(statement);//设置sql
+    try (FileWriter writer = new FileWriter("sqlTest.txt", true)) {
+      writer.write(pipeInfo.getSql());  // 将字符串写入文件
+    } catch (IOException e) {
+      System.out.println("发生错误：" + e.getMessage());
+    }
     IClientSession clientSession = SESSION_MANAGER.getCurrSessionAndUpdateIdleTime();
     // quota
     OperationQuota quota = null;

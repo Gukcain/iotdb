@@ -44,7 +44,7 @@ public class ServerStart {
       targs.transportFactory(tTransport);
 
       TServer server = new THsHaServer(targs);
-      System.out.println("Starting the edge server...");
+      System.out.println("----Starting the edge server...");
       server.serve();
     } catch (Exception e) {
       e.printStackTrace();
