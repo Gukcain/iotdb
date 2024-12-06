@@ -74,6 +74,7 @@ import org.apache.iotdb.db.qp.sql.IoTDBSqlParser;
 import org.apache.iotdb.db.qp.sql.SqlLexer;
 import org.apache.iotdb.db.queryengine.execution.exchange.MPPDataExchangeService;
 import org.apache.iotdb.db.queryengine.execution.schedule.DriverScheduler;
+import org.apache.iotdb.db.queryengine.plan.execution.ServerStart;
 import org.apache.iotdb.db.queryengine.plan.parser.ASTVisitor;
 import org.apache.iotdb.db.queryengine.plan.parser.StatementGenerator;
 import org.apache.iotdb.db.queryengine.plan.planner.LogicalPlanVisitor;
@@ -181,6 +182,10 @@ public class DataNode implements DataNodeMBean {
     logger.info("IoTDB-DataNode environment variables: {}", IoTDBConfig.getEnvironmentVariables());
     logger.info("IoTDB-DataNode default charset is: {}", Charset.defaultCharset().displayName());
     new DataNodeServerCommandLine().doMain(args);
+
+    //新建thrift服务器
+    Thread serverThread = new Thread(new ServerRunnable());//启动服务器
+    serverThread.start();
   }
 
   protected void doAddNode() {
@@ -1041,5 +1046,14 @@ public class DataNode implements DataNodeMBean {
     private DataNodeHolder() {
       // Empty constructor
     }
+  }
+}
+
+class ServerRunnable implements Runnable {
+  @Override
+  public void run() {
+    // 创建并启动服务器
+    ServerStart server = new ServerStart();
+    server.start();
   }
 }

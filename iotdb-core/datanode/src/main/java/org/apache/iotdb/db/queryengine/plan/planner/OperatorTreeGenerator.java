@@ -2189,6 +2189,7 @@ public class OperatorTreeGenerator extends PlanVisitor<Operator, LocalExecutionP
     int fragmentId = pipeInfo.getFragmentId();
     int sourceId = Integer.parseInt(node.getPlanNodeId().getId());
     pipeInfo.addJoinSatus(sourceId, fragmentId); // 添加到表
+    System.out.println("----Cloud OperatorTreeGenerator: status = " + pipeInfo.getPipeStatus());
     if (pipeInfo.getPipeStatus()) {
       ackSend(fragmentId, sourceId);
       while (!pipeInfo.getJoinStatus(sourceId).getStatus()) { // 跳出说明接收到修改信号
