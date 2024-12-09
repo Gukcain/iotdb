@@ -395,11 +395,18 @@ public class InnerTimeJoinOperator implements ProcessOperator {
           inputBlocksAfterProcess.add(resultBlock);
         }
       }
+      pipeInfo.getJoinStatus(Integer.parseInt(localPlanNode.getId())).setReadyToSendBlock(true);
       // TODO: 测试一下构造的新block是否正确（所有能join上的都要在block内，join不上的无所谓）。可以考虑构造一些时间序列数据（尽量越多越好）在这输出一下看看。
       // 发送到云端
       if (!sinkHandle.isAborted()) {
         for (TsBlock block : inputBlocksAfterProcess) {
           sinkHandle.send(block); // 发送数据   // TODO: 发送的是一组TsBlock，接收端如何确保正确收到？
+          try (FileWriter writer = new FileWriter("HandleTest.txt", true)) {
+            writer.write("----[Edge]Send TsBlock: "+ block.getPositionCount() + "\n");  // 将字符串写入文件
+            System.out.println("----[Edge]Send TsBlock: "+ block.getPositionCount());
+          } catch (IOException e) {
+            System.out.println("发生错误：" + e.getMessage());
+          }
         }
       }
       while (sinkHandle.getChannel(0).getNumOfBufferedTsBlocks() != 0) { // 防止有数据没有发送完就关闭通道
@@ -411,6 +418,7 @@ public class InnerTimeJoinOperator implements ProcessOperator {
       }
       sinkHandle.setNoMoreTsBlocksOfOneChannel(0); // 关闭
       sinkHandle.close();
+      pipeInfo.getJoinStatus(Integer.parseInt(localPlanNode.getId())).setReadyToSendBlock(false);
 
       ListenableFuture<?> isBlocked = sourceHandle.isBlocked();
       while (!isBlocked.isDone() && !sourceHandle.isFinished()) {
@@ -424,6 +432,12 @@ public class InnerTimeJoinOperator implements ProcessOperator {
       TsBlock tsBlock_rev = null;
       if (!sourceHandle.isFinished()) {
         tsBlock_rev = sourceHandle.receive();
+        try (FileWriter writer = new FileWriter("HandleTest.txt", true)) {
+          writer.write("----[Edge]Receive TsBlock: "+ tsBlock_rev.getPositionCount() + "\n");  // 将字符串写入文件
+          System.out.println("----[Edge]Receive TsBlock: "+ tsBlock_rev.getPositionCount());
+        } catch (IOException e) {
+          System.out.println("发生错误：" + e.getMessage());
+        }
         return tsBlock_rev;
         // 返回的应该就是可用结果？
         //        appendToBuilder(tsBlock_rev);

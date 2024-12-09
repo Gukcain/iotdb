@@ -16,6 +16,7 @@ public class OperatorStatusInfo {
   private boolean setStartTime = false;
   private int oldFragmentId = 0;
   private boolean hasNext = false;
+  private boolean readyToSendBlock = false;
 
   private long startTime = 0; // 起始时间
   private ISinkHandle EToCSinkHandle;
@@ -104,4 +105,10 @@ public class OperatorStatusInfo {
   public void setHasNext(boolean hasNext) {
     this.hasNext = hasNext;
   }
+
+  public boolean isReadyToSendBlock() {
+      return readyToSendBlock;
+  }
+
+  public void setReadyToSendBlock(boolean readyToSendBlock) {this.readyToSendBlock = readyToSendBlock;}
 }

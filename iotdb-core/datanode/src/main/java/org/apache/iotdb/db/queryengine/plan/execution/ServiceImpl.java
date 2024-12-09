@@ -17,15 +17,15 @@ public class ServiceImpl implements PipeEtoCService.Iface {
     PipeInfo pipeInfo = PipeInfo.getInstance();
     //        pipeInfo.getScanStatus(SourceId).setCloudFragmentId(CloudFragmentId);
     pipeInfo.getJoinStatus(SourceId).setCloudFragmentId(CloudFragmentId);
-    System.out.println("CloudFragmentId:" + CloudFragmentId + "sourceid" + SourceId);
+    System.out.println("CloudFragmentId:" + CloudFragmentId + "   sourceid" + SourceId);
     //        while((!pipeInfo.getScanStatus(SourceId).isSetOffset()) &&
     // (!pipeInfo.getScanStatus(SourceId).isSetStartTime())){
-    while (!pipeInfo.getJoinStatus(SourceId).isSetStartTime()) {
+    while (!pipeInfo.getJoinStatus(SourceId).isReadyToSendBlock()) {
       try {
         Thread.sleep(10); // 时间
         //
         // System.out.println("waiting"+pipeInfo.getScanStatus(SourceId).isSetStartTime());
-        System.out.println("waiting" + pipeInfo.getJoinStatus(SourceId).isSetStartTime());
+        System.out.println("waiting" + pipeInfo.getJoinStatus(SourceId).isSetOffset());
       } catch (InterruptedException e) {
         throw new RuntimeException(e);
       }
@@ -41,9 +41,9 @@ public class ServiceImpl implements PipeEtoCService.Iface {
       // 调用服务方法
       //
       client.AnsMessage(
-          pipeInfo.getScanStatus(SourceId).getEdgeFragmentId(),
+          pipeInfo.getJoinStatus(SourceId).getEdgeFragmentId(),
           SourceId,
-          pipeInfo.getScanStatus(SourceId).getOffset());
+          pipeInfo.getJoinStatus(SourceId).getOffset());
       //      client.AnsMessage(
       //          pipeInfo.getJoinStatus(SourceId).getEdgeFragmentId(),
       //          SourceId,
