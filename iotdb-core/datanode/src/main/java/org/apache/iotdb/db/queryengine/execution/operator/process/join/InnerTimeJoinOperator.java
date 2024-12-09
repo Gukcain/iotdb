@@ -46,6 +46,8 @@ import org.apache.iotdb.tsfile.read.common.block.column.TimeColumnBuilder;
 
 import com.google.common.util.concurrent.ListenableFuture;
 
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -284,7 +286,13 @@ public class InnerTimeJoinOperator implements ProcessOperator {
       int rec_num = 0;
       while(!sourceHandle.isFinished()&&rec_num<=inputTsBlocks.length){
 //      if (!sourceHandle.isFinished()) {
-        tsBlock_rev = sourceHandle.receive();
+        tsBlock_rev = sourceHandle.receive();     // Exception: SourceHandle is blocked
+        try (FileWriter writer = new FileWriter("HandleTest.txt", true)) {
+          writer.write("----[Cloud]Receive TsBlock: "+ tsBlock_rev.getPositionCount() + "\n");  // 将字符串写入文件
+          System.out.println("----[Cloud]Receive TsBlock: "+ tsBlock_rev.getPositionCount());
+        } catch (IOException e) {
+          System.out.println("发生错误：" + e.getMessage());
+        }
         inputTsBlocks[rec_num] = tsBlock_rev;
         rec_num++;
       }
@@ -347,6 +355,12 @@ public class InnerTimeJoinOperator implements ProcessOperator {
     TsBlock res = resultBuilder.build();
     if(PipeInfo.getInstance().getPipeStatus()&&PipeInfo.getInstance().getJoinStatus(Integer.parseInt(localPlanNode.getId())).getStatus())
       sinkHandle.send(res);//发送数据
+    try (FileWriter writer = new FileWriter("HandleTest.txt", true)) {
+      writer.write("----[Cloud]Send TsBlock: "+ res.getPositionCount() + "\n");  // 将字符串写入文件
+      System.out.println("----[Cloud]Send TsBlock: "+ res.getPositionCount());
+    } catch (IOException e) {
+      System.out.println("发生错误：" + e.getMessage());
+    }
     resultBuilder.reset();
     return res;
   }

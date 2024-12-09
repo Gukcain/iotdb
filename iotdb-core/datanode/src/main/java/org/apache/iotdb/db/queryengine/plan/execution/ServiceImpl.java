@@ -19,11 +19,12 @@ public class ServiceImpl implements PipeCtoEService.Iface {
   public void AnsMessage(int EdgeFragmentId, int SourceId, int ReadOffset) throws TException {
     PipeInfo pipeInfo = PipeInfo.getInstance();
 //    pipeInfo.getScanStatus(SourceId).setEdgeFragmentId(EdgeFragmentId);
-//    pipeInfo.getScanStatus(SourceId).setOffset(ReadOffset);
+    pipeInfo.getJoinStatus(SourceId).setOffset(ReadOffset);
 //    pipeInfo.getScanStatus(SourceId).setStatus(true);
     pipeInfo.getJoinStatus(SourceId).setEdgeFragmentId(EdgeFragmentId);
 //    pipeInfo.getJoinStatus(SourceId).setHasNext(hasNext);
     pipeInfo.getJoinStatus(SourceId).setStatus(true);
+    pipeInfo.getJoinStatus(SourceId).setSetOffset(true);
   }
 
   public void AnsMessage(int EdgeFragmentId, int SourceId, boolean hasNext) throws TException {
@@ -59,7 +60,13 @@ class ExcuteSqlRunnable implements Runnable {
 
   @Override
   public void run() {
-
+    while(sql==null){
+        try {
+            Thread.sleep(10);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
     ClientRPCServiceImpl clientRPCService = new ClientRPCServiceImpl();
     clientRPCService.excuteIdentitySql(sql);
     System.out.println("start sql!!!!!!!!!!!!");

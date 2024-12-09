@@ -57,6 +57,8 @@ import com.google.common.util.concurrent.SettableFuture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.FileWriter;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Optional;
@@ -160,11 +162,21 @@ public class QueryExecution implements IQueryExecution {
         constructResultForMemorySource();
         stateMachine.transitionToRunning();
       }
+      try (FileWriter writer = new FileWriter("SQLExecutionTest.txt", true)) {
+        writer.write("Execution: QueryExecution SkipExecute"  + "\n");  // 将字符串写入文件
+      } catch (IOException e) {
+        System.out.println("发生错误：" + e.getMessage());
+      }
       return;
     }
 
     // check timeout for query first
     checkTimeOutForQuery();
+    try (FileWriter writer = new FileWriter("SQLExecutionTest.txt", true)) {
+      writer.write("Execution: QueryExecution Start"  + "\n");  // 将字符串写入文件
+    } catch (IOException e) {
+      System.out.println("发生错误：" + e.getMessage());
+    }
     doLogicalPlan();
     doDistributedPlan();
 

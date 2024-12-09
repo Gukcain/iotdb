@@ -270,6 +270,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -2198,6 +2200,12 @@ public class OperatorTreeGenerator extends PlanVisitor<Operator, LocalExecutionP
         } catch (InterruptedException e) {
           throw new RuntimeException(e);
         }
+      }
+      try (FileWriter writer = new FileWriter("HandleTest.txt", true)) {
+        writer.write("----[Cloud] Get AnsMessage: Set JoinStatus = True\n");  // 将字符串写入文件
+        System.out.println("----[Cloud] Get AnsMessage: Set JoinStatus = True");
+      } catch (IOException e) {
+        System.out.println("发生错误：" + e.getMessage());
       }
     }
 
