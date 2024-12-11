@@ -199,7 +199,7 @@ public class InnerTimeJoinOperator implements ProcessOperator {
             .getStatus()) {
       try { // 如果这次和上次的cloud fragmentId一样说明此时新的cloud fragmentId还没发送过来 等待
         Thread.sleep(10);
-        System.out.println("waiting");
+        System.out.println("waiting in createSourceHandle");
       } catch (InterruptedException e) {
         throw new RuntimeException(e);
       }
@@ -291,14 +291,16 @@ public class InnerTimeJoinOperator implements ProcessOperator {
     }
     PipeInfo pipeInfo = PipeInfo.getInstance();
     System.out.println("----status:" + pipeInfo.getPipeStatus());
-    pipeInfo.setPipeStatus(true);
-    pipeInfo.setMonitorFlag(true);
-    while(pipeInfo.getJoinStatus(Integer.parseInt(localPlanNode.getId())).getCloudFragmentId()==0){
-      Thread.sleep(100);
+    if(!pipeInfo.getPipeStatus()) {     // 测试阶段用 pipeStatus为false时就发送启动pipe信号
+      pipeInfo.setPipeStartFlag(true);
+      pipeInfo.setPipeStatus(true);     // TODO: 删掉后不能进入if
     }
-    System.out.println("----For Test: Set status: " + pipeInfo.getPipeStatus());
+
     //    if (CloudEdgeCollaborativeFlag.getInstance().cloudEdgeCollaborativeFlag) {
     if (pipeInfo.getPipeStatus()) {
+      while(pipeInfo.getJoinStatus(Integer.parseInt(localPlanNode.getId())).getCloudFragmentId()==0){
+        Thread.sleep(100);
+      }
       // 构建pipeline的sourceHandle和sinkHandle
       if(!hasHandles){
         createSinkHandle();
@@ -400,6 +402,7 @@ public class InnerTimeJoinOperator implements ProcessOperator {
       // 发送到云端
       if (!sinkHandle.isAborted()) {
         for (TsBlock block : inputBlocksAfterProcess) {
+//          for (TsBlock block : inputTsBlocks) {
           sinkHandle.send(block); // 发送数据   // TODO: 发送的是一组TsBlock，接收端如何确保正确收到？
           try (FileWriter writer = new FileWriter("HandleTest.txt", true)) {
             writer.write("----[Edge]Send TsBlock: "+ block.getPositionCount() + "\n");  // 将字符串写入文件
@@ -416,15 +419,15 @@ public class InnerTimeJoinOperator implements ProcessOperator {
           throw new RuntimeException(e);
         }
       }
-      sinkHandle.setNoMoreTsBlocksOfOneChannel(0); // 关闭
-      sinkHandle.close();
+//      sinkHandle.setNoMoreTsBlocksOfOneChannel(0); // TODO: 什么时候才应该关闭sink？ hasNext返回false时？
+//      sinkHandle.close();
       pipeInfo.getJoinStatus(Integer.parseInt(localPlanNode.getId())).setReadyToSendBlock(false);
 
       ListenableFuture<?> isBlocked = sourceHandle.isBlocked();
       while (!isBlocked.isDone() && !sourceHandle.isFinished()) {
         try {
           Thread.sleep(10);
-          System.out.println("waiting");
+          System.out.println("waiting for sourceHandle NOT blocked");
         } catch (InterruptedException e) {
           throw new RuntimeException(e);
         }
@@ -438,20 +441,26 @@ public class InnerTimeJoinOperator implements ProcessOperator {
         } catch (IOException e) {
           System.out.println("发生错误：" + e.getMessage());
         }
+        for (int i = 0; i < inputOperatorsCount; i++) {     // TODO:代替cleanUpInputTsBlock()的功能，貌似有问题
+          inputTsBlocks[i] = null;
+          inputIndex[i] = 0;
+        }
         return tsBlock_rev;
         // 返回的应该就是可用结果？
         //        appendToBuilder(tsBlock_rev);
       } else {
-        if (pipeInfo.getPipeStatus()) { // TODO:这种情况说明cloud端有代码控制pipeStatus 在哪？
+        if (pipeInfo.getPipeStatus()) {
           // 还在启动，说明是传完了
           finished = true;
           pipeInfo.getJoinStatus(Integer.parseInt(localPlanNode.getId())).setStatus(false);
+          sourceHandle.close();
           sourceHandle = null;
           return tsBlock_rev;
         } else {
           // 出问题了 之前的操作都舍弃，运行后面的代码正常在本地join
           pipeInfo.getJoinStatus(Integer.parseInt(localPlanNode.getId())).setStatus(false);
           pipeInfo.getJoinStatus(Integer.parseInt(localPlanNode.getId())).setSetOffset(false); // 没用
+          sourceHandle.close();
           sourceHandle = null;
         }
       }
@@ -708,6 +717,16 @@ public class InnerTimeJoinOperator implements ProcessOperator {
     // return false if any child is consumed up.
     for (int i = 0; i < inputOperatorsCount; i++) {
       if (isEmpty(i) && canCallNext[i] && !children.get(i).hasNextWithTimer()) {
+        if(sinkHandle!=null){
+          sinkHandle.setNoMoreTsBlocksOfOneChannel(0); // TODO: 什么时候才应该关闭sink？ hasNext返回false时？
+          sinkHandle.close();
+          sinkHandle = null;
+        }
+        if(sourceHandle!=null){
+          sourceHandle.close();
+          sourceHandle = null;
+        }
+
         return false;
       }
     }

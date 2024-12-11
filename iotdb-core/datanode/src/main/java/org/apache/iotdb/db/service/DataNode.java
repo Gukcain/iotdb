@@ -1078,10 +1078,17 @@ class MonitorRunnable implements Runnable {
 //    }
     while (true) {
       // 检查变量
-      if (PipeInfo.getInstance().isMonitorFlag()) {
+      if (PipeInfo.getInstance().isPipeStartFlag()) {
+        PipeInfo.getInstance().setPipeStatus(true);
         pipe.PipeStart();
         // 防止重复调用，将标志位重置为 false
-        PipeInfo.getInstance().setMonitorFlag(false);
+        PipeInfo.getInstance().setPipeStartFlag(false);
+      }
+      if (PipeInfo.getInstance().isPipeCloseFlag()) {
+        PipeInfo.getInstance().setPipeStatus(false);
+        pipe.PipeStop();
+        // 防止重复调用，将标志位重置为 false
+        PipeInfo.getInstance().setPipeCloseFlag(false);
       }
 
       // 防止忙等导致的 CPU 占用过高

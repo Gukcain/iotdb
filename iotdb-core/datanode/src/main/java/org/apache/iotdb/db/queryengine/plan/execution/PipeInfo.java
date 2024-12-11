@@ -15,7 +15,8 @@ public class PipeInfo {
   private int fragmentId;
   private String sql;
   // 线程安全的标志变量
-  private volatile boolean monitorFlag = false;
+  private volatile boolean pipeStartFlag = false;     // 开启pipe
+  private volatile boolean pipeCloseFlag = false;     // 关闭pipe
 
   // 私有构造方法，避免外部实例化
   private PipeInfo() {
@@ -93,11 +94,19 @@ public class PipeInfo {
     this.sql = sql;
   }
 
-  public boolean isMonitorFlag() {
-      return monitorFlag;
+  public boolean isPipeStartFlag() {
+      return pipeStartFlag;
   }
 
-  public void setMonitorFlag(boolean flag) {
-    this.monitorFlag = flag;
+  public void setPipeStartFlag(boolean flag) {
+    this.pipeStartFlag = flag;
+  }
+
+  public boolean isPipeCloseFlag() {
+      return pipeCloseFlag;
+  }
+
+  public void setPipeCloseFlag(boolean flag) {
+    this.pipeCloseFlag = flag;
   }
 }

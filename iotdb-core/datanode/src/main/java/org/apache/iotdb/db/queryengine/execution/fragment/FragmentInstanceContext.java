@@ -284,7 +284,8 @@ public class FragmentInstanceContext extends QueryContext {
   }
 
   public void finished() {
-    stateMachine.finished();
+    if(stateMachine!=null)
+      stateMachine.finished();
   }
 
   public void transitionToFlushing() {

@@ -273,11 +273,6 @@ public class ClientRPCServiceImpl implements IClientRPCServiceWithHandler {
     String statement = req.getStatement();
     PipeInfo pipeInfo=PipeInfo.getInstance();
     pipeInfo.setSql(statement);//设置sql
-    try (FileWriter writer = new FileWriter("sqlTest.txt", true)) {
-      writer.write(pipeInfo.getSql());  // 将字符串写入文件
-    } catch (IOException e) {
-      System.out.println("发生错误：" + e.getMessage());
-    }
     IClientSession clientSession = SESSION_MANAGER.getCurrSessionAndUpdateIdleTime();
     // quota
     OperationQuota quota = null;
@@ -373,6 +368,10 @@ public class ClientRPCServiceImpl implements IClientRPCServiceWithHandler {
       if (quota != null) {
         quota.close();
       }
+
+      if(pipeInfo.getPipeStatus())
+        pipeInfo.setPipeCloseFlag(true);
+      System.out.println("----QueryExecutionEnded");
     }
   }
 
