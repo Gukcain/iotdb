@@ -2741,7 +2741,7 @@ public class ClientRPCServiceImpl implements IClientRPCServiceWithHandler {
     SubscriptionAgent.receiver().handleClientExit();
   }
 
-  public void excuteIdentitySql(String sql) {
+  public void executeIdentitySql(String sql) {
 
     //    long queryId = Long.MIN_VALUE;
     long queryId = 10L;

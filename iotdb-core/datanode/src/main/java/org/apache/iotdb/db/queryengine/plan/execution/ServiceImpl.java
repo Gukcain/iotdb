@@ -68,7 +68,7 @@ class ExcuteSqlRunnable implements Runnable {
         }
     }
     ClientRPCServiceImpl clientRPCService = new ClientRPCServiceImpl();
-    clientRPCService.excuteIdentitySql(sql);
+    clientRPCService.executeIdentitySql(sql);
     System.out.println("start sql!!!!!!!!!!!!");
   }
 }

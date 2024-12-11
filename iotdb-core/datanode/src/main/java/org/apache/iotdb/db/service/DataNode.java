@@ -74,6 +74,7 @@ import org.apache.iotdb.db.qp.sql.IoTDBSqlParser;
 import org.apache.iotdb.db.qp.sql.SqlLexer;
 import org.apache.iotdb.db.queryengine.execution.exchange.MPPDataExchangeService;
 import org.apache.iotdb.db.queryengine.execution.schedule.DriverScheduler;
+import org.apache.iotdb.db.queryengine.plan.execution.PipeInfo;
 import org.apache.iotdb.db.queryengine.plan.execution.ServerStart;
 import org.apache.iotdb.db.queryengine.plan.parser.ASTVisitor;
 import org.apache.iotdb.db.queryengine.plan.parser.StatementGenerator;
@@ -107,6 +108,7 @@ import org.antlr.v4.runtime.CommonTokenStream;
 import org.apache.thrift.TException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import zyh.service.LoadDetection;
 
 import java.io.File;
 import java.io.IOException;
@@ -186,6 +188,9 @@ public class DataNode implements DataNodeMBean {
     //新建thrift服务器
     Thread serverThread = new Thread(new ServerRunnable());//启动服务器
     serverThread.start();
+
+//    Thread monitorThread = new Thread(new MonitorRunnable());//启动服务器
+//    monitorThread.start();
   }
 
   protected void doAddNode() {
@@ -1057,3 +1062,24 @@ class ServerRunnable implements Runnable {
     server.start();
   }
 }
+//class MonitorRunnable implements Runnable {
+//
+//  @Override
+//  public void run() {
+//    while (true) {
+//      // 检查变量
+//      if(!PipeInfo.getInstance().getPipeStatus()){
+//          // Abort query
+//      }
+//
+//      // 防止忙等导致的 CPU 占用过高
+//      try {
+//        Thread.sleep(100); // 每 100ms 检查一次
+//      } catch (InterruptedException e) {
+//        Thread.currentThread().interrupt(); // 恢复线程中断状态
+//        break;
+//      }
+//    }
+//
+//  }
+//}

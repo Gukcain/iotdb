@@ -257,6 +257,7 @@ public class InnerTimeJoinOperator implements ProcessOperator {
 
   @Override
   public TsBlock next() throws Exception {
+    System.out.println("Join Next()");
     if(PipeInfo.getInstance().getPipeStatus()&&PipeInfo.getInstance().getJoinStatus(Integer.parseInt(localPlanNode.getId())).getStatus()){
 //      Column[] valueColumns = resultTsBlock.getValueColumns();
 //      System.out.println("result columns binary:");
@@ -273,25 +274,39 @@ public class InnerTimeJoinOperator implements ProcessOperator {
       System.out.println("localfragmentid:"+cloudFragmentId);
       System.out.println("remoteid:"+PipeInfo.getInstance().getJoinStatus(Integer.parseInt(localPlanNode.getId())).getEdgeFragmentId());
 
-      ListenableFuture<?> isBlocked = sourceHandle.isBlocked();
-      while (!isBlocked.isDone()&&!sourceHandle.isFinished()) {
-        try {
-          Thread.sleep(10);
-          System.out.println("waiting");
-        } catch (InterruptedException e) {
-          throw new RuntimeException(e);
-        }
-      }
+//      ListenableFuture<?> isBlocked = sourceHandle.isBlocked();
+//      while (!isBlocked.isDone()&&!sourceHandle.isFinished()) {
+//        try {
+//          Thread.sleep(10);
+//          System.out.println("waiting");
+//        } catch (InterruptedException e) {
+//          throw new RuntimeException(e);
+//        }
+//      }
       TsBlock tsBlock_rev = null;
       int rec_num = 0;
-      while(!sourceHandle.isFinished()&&rec_num<=inputTsBlocks.length){
+      while(!sourceHandle.isFinished()&&rec_num<inputTsBlocks.length){
 //      if (!sourceHandle.isFinished()) {
+        ListenableFuture<?> isBlocked = sourceHandle.isBlocked();
+        while (!isBlocked.isDone()&&!sourceHandle.isFinished()) {
+          try {
+            Thread.sleep(10);
+            System.out.println("waiting for sourceHandle NOT blocked");
+            if(!PipeInfo.getInstance().getPipeStatus()){      // Pipe被边端关闭了就不再等待了
+              return resultBuilder.build();
+            }
+          } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+          }
+        }
         tsBlock_rev = sourceHandle.receive();     // Exception: SourceHandle is blocked
-        try (FileWriter writer = new FileWriter("HandleTest.txt", true)) {
-          writer.write("----[Cloud]Receive TsBlock: "+ tsBlock_rev.getPositionCount() + "\n");  // 将字符串写入文件
-          System.out.println("----[Cloud]Receive TsBlock: "+ tsBlock_rev.getPositionCount());
-        } catch (IOException e) {
-          System.out.println("发生错误：" + e.getMessage());
+        if(tsBlock_rev!=null){
+          try (FileWriter writer = new FileWriter("HandleTest.txt", true)) {
+            writer.write("----[Cloud]Receive TsBlock: "+ tsBlock_rev.getPositionCount() + "\n");  // 将字符串写入文件
+            System.out.println("----[Cloud]Receive TsBlock: "+ tsBlock_rev.getPositionCount());
+          } catch (IOException e) {
+            System.out.println("发生错误：" + e.getMessage());
+          }
         }
         inputTsBlocks[rec_num] = tsBlock_rev;
         rec_num++;
@@ -534,9 +549,12 @@ public class InnerTimeJoinOperator implements ProcessOperator {
 
   @Override
   public boolean hasNext() throws Exception {
-
+    System.out.println("Join hasNext()");
     if (PipeInfo.getInstance().getPipeStatus()&&PipeInfo.getInstance().getJoinStatus(Integer.parseInt(localPlanNode.getId())).getStatus())
       return true;   // TODO: 正确性？
+    else if(!PipeInfo.getInstance().getPipeStatus()){
+      return false;   // pipe被边端关闭了就不再需要执行下去了
+    }
 
     // return false if any child is consumed up.
     for (int i = 0; i < inputOperatorsCount; i++) {

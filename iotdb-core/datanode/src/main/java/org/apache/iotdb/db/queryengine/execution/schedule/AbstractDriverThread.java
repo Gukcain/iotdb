@@ -21,6 +21,7 @@ package org.apache.iotdb.db.queryengine.execution.schedule;
 
 import org.apache.iotdb.db.queryengine.execution.schedule.queue.IndexedBlockingQueue;
 import org.apache.iotdb.db.queryengine.execution.schedule.task.DriverTask;
+import org.apache.iotdb.db.queryengine.plan.execution.PipeInfo;
 import org.apache.iotdb.db.utils.SetThreadName;
 
 import org.slf4j.Logger;
@@ -71,6 +72,14 @@ public abstract class AbstractDriverThread extends Thread implements Closeable {
 
         try (SetThreadName driverTaskName = new SetThreadName(next.getDriverTaskId().getFullId())) {
           execute(next);
+          if(!PipeInfo.getInstance().getPipeStatus()){
+            System.out.println("Pipe is closed. Abort the Query.");
+            try (SetThreadName TransferDriverTaskName =
+                         new SetThreadName(next.getDriver().getDriverTaskId().getFullId())) {
+              next.setAbortCause(DriverTaskAbortedException.BY_INTERNAL_ERROR_SCHEDULED);
+              scheduler.toAborted(next);
+            }
+          }
         } catch (Exception e) {
           // Try-with-resource syntax will call close once after try block is done, so we need to
           // reset the thread name here
