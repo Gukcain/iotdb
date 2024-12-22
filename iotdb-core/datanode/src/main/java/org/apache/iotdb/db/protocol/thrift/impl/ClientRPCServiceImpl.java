@@ -368,6 +368,7 @@ public class ClientRPCServiceImpl implements IClientRPCServiceWithHandler {
     }
   }
 
+
   private TSExecuteStatementResp executeRawDataQueryInternal(
       TSRawDataQueryReq req, SelectResult setResult) {
     boolean finished = false;

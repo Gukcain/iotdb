@@ -35,6 +35,7 @@ import org.apache.iotdb.db.queryengine.execution.operator.process.join.merge.Tim
 import org.apache.iotdb.db.queryengine.plan.execution.PipeInfo;
 import org.apache.iotdb.db.queryengine.plan.planner.plan.node.PlanNodeId;
 import org.apache.iotdb.db.queryengine.plan.planner.plan.parameter.InputLocation;
+import org.apache.iotdb.db.zcy.service.PipeEtoCService;
 import org.apache.iotdb.mpp.rpc.thrift.TFragmentInstanceId;
 import org.apache.iotdb.tsfile.common.conf.TSFileDescriptor;
 import org.apache.iotdb.tsfile.file.metadata.enums.TSDataType;
@@ -45,6 +46,12 @@ import org.apache.iotdb.tsfile.read.common.block.column.ColumnBuilder;
 import org.apache.iotdb.tsfile.read.common.block.column.TimeColumnBuilder;
 
 import com.google.common.util.concurrent.ListenableFuture;
+import org.apache.thrift.TException;
+import org.apache.thrift.protocol.TBinaryProtocol;
+import org.apache.thrift.protocol.TProtocol;
+import org.apache.thrift.transport.TSocket;
+import org.apache.thrift.transport.TTransport;
+import org.apache.thrift.transport.layered.TFramedTransport;
 
 import java.io.FileWriter;
 import java.io.IOException;
@@ -364,6 +371,12 @@ public class InnerTimeJoinOperator implements ProcessOperator {
       }
     }
 
+    List<Integer> newIndexes = new ArrayList<>();
+    for (int i = 0; i < inputOperatorsCount; i++) {
+      newIndexes.add(inputIndex[i]);
+    }
+    sendNewIndexes(newIndexes);
+
     // set corresponding inputTsBlock to null if its index already reach its size, friendly for gc
     cleanUpInputTsBlock();
 
@@ -378,6 +391,30 @@ public class InnerTimeJoinOperator implements ProcessOperator {
     }
     resultBuilder.reset();
     return res;
+  }
+
+  private void sendNewIndexes(List<Integer> newIndexes) {
+    TTransport transport = null;
+    try {
+      transport = new TFramedTransport(new TSocket("localhost", 9090));
+      TProtocol protocol = new TBinaryProtocol(transport);
+      PipeEtoCService.Client client = new PipeEtoCService.Client(protocol);
+      transport.open();
+      // 调用服务方法
+      int sourceId = Integer.parseInt(localPlanNode.getId());
+      client.AckMessageWithIndex(newIndexes, sourceId);
+      System.out.println("Send NewIndexes:" + sourceId + " is sent successfully.");
+      for(int i:newIndexes){
+        System.out.println("Send NewIndexes[]: " + i );
+      }
+
+    } catch (TException x) {
+      x.printStackTrace();
+    } finally {
+      if (null != transport) {
+        transport.close();
+      }
+    }
   }
 
   // return selected row index for each child's tsblock
