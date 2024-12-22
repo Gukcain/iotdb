@@ -2,6 +2,9 @@ package org.apache.iotdb.db.queryengine.plan.execution;
 
 import org.apache.iotdb.db.queryengine.execution.exchange.sink.ISinkHandle;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class OperatorStatusInfo {
   private int sourceId = 0;
   private int edgeFragmentId = 0;
@@ -17,6 +20,7 @@ public class OperatorStatusInfo {
   private int oldFragmentId = 0;
   private boolean hasNext = false;
   private boolean readyToSendBlock = false;
+  private List<Integer> newIndexes = new ArrayList<Integer>();
 
   private long startTime = 0; // 起始时间
   private ISinkHandle EToCSinkHandle;
@@ -111,4 +115,12 @@ public class OperatorStatusInfo {
   }
 
   public void setReadyToSendBlock(boolean readyToSendBlock) {this.readyToSendBlock = readyToSendBlock;}
+
+  public List<Integer> getNewIndexes() {
+      return newIndexes;
+  }
+
+  public void setNewIndexes(List<Integer> newIndexes) {
+    this.newIndexes = newIndexes;
+  }
 }

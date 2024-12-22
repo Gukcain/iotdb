@@ -369,8 +369,8 @@ public class ClientRPCServiceImpl implements IClientRPCServiceWithHandler {
         quota.close();
       }
 
-      if(pipeInfo.getPipeStatus())
-        pipeInfo.setPipeCloseFlag(true);
+//      if(pipeInfo.getPipeStatus())
+//        pipeInfo.setPipeCloseFlag(true);
       System.out.println("----QueryExecutionEnded");
     }
   }

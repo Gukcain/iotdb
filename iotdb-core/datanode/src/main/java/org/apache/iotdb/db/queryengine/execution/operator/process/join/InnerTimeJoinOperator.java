@@ -395,14 +395,17 @@ public class InnerTimeJoinOperator implements ProcessOperator {
           resultBlock = FilterResultBuilder.build();
           FilterResultBuilder.reset();
           inputBlocksAfterProcess.add(resultBlock);
+
+          // TODO: 12-21 直接修改inputBlock[], 否则后面收到的newindex和这里的inputBlock对不上
+//          inputTsBlocks[i] = resultBlock;
         }
       }
       pipeInfo.getJoinStatus(Integer.parseInt(localPlanNode.getId())).setReadyToSendBlock(true);
       // TODO: 测试一下构造的新block是否正确（所有能join上的都要在block内，join不上的无所谓）。可以考虑构造一些时间序列数据（尽量越多越好）在这输出一下看看。
       // 发送到云端
       if (!sinkHandle.isAborted()) {
-        for (TsBlock block : inputBlocksAfterProcess) {
-//          for (TsBlock block : inputTsBlocks) {
+//        for (TsBlock block : inputBlocksAfterProcess) {
+          for (TsBlock block : inputTsBlocks) {
           sinkHandle.send(block); // 发送数据   // TODO: 发送的是一组TsBlock，接收端如何确保正确收到？
           try (FileWriter writer = new FileWriter("HandleTest.txt", true)) {
             writer.write("----[Edge]Send TsBlock: "+ block.getPositionCount() + "\n");  // 将字符串写入文件
@@ -441,10 +444,20 @@ public class InnerTimeJoinOperator implements ProcessOperator {
         } catch (IOException e) {
           System.out.println("发生错误：" + e.getMessage());
         }
-        for (int i = 0; i < inputOperatorsCount; i++) {     // TODO:代替cleanUpInputTsBlock()的功能，貌似有问题
-          inputTsBlocks[i] = null;
-          inputIndex[i] = 0;
+        List<Integer> newIndexes = pipeInfo.getJoinStatus(Integer.parseInt(localPlanNode.getId())).getNewIndexes();
+        while(newIndexes.isEmpty()){   // 未收到更新 等待云端发来
+          try {
+            Thread.sleep(10);
+            System.out.println("waiting for sourceHandle NOT blocked");
+          } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+          }
         }
+        for (int i = 0; i < inputOperatorsCount; i++) {   // 根据云端的信息更新一下inputindex
+          inputIndex[i] = newIndexes.get(i);
+        }
+        cleanUpInputTsBlock();
+        pipeInfo.getJoinStatus(Integer.parseInt(localPlanNode.getId())).getNewIndexes().clear();    // 用云端信息更新本地index后清空newindexes
         return tsBlock_rev;
         // 返回的应该就是可用结果？
         //        appendToBuilder(tsBlock_rev);

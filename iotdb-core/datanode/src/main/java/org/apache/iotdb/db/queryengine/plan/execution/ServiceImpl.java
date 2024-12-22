@@ -10,6 +10,8 @@ import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransport;
 import org.apache.thrift.transport.layered.TFramedTransport;
 
+import java.util.List;
+
 public class ServiceImpl implements PipeEtoCService.Iface {
 
   @Override
@@ -56,5 +58,24 @@ public class ServiceImpl implements PipeEtoCService.Iface {
         transport.close();
       }
     }
+  }
+
+  @Override
+  public void AckMessageWithIndex(List<Integer> newIndex, int SourceId) throws TException {
+    PipeInfo pipeInfo = PipeInfo.getInstance();
+    //        pipeInfo.getScanStatus(SourceId).setCloudFragmentId(CloudFragmentId);
+    pipeInfo.getJoinStatus(SourceId).setNewIndexes(newIndex);
+    //        while((!pipeInfo.getScanStatus(SourceId).isSetOffset()) &&
+    // (!pipeInfo.getScanStatus(SourceId).isSetStartTime())){
+//    while (!pipeInfo.getJoinStatus(SourceId).isReadyToSendBlock()) {
+//      try {
+//        Thread.sleep(10); // 时间
+//        //
+//        // System.out.println("waiting"+pipeInfo.getScanStatus(SourceId).isSetStartTime());
+//        System.out.println("waiting" + pipeInfo.getJoinStatus(SourceId).isSetOffset());
+//      } catch (InterruptedException e) {
+//        throw new RuntimeException(e);
+//      }
+//    }
   }
 }
