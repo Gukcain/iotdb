@@ -329,6 +329,10 @@ public class InnerTimeJoinOperator implements ProcessOperator {
       BloomFilter filter =
           BloomFilter.getEmptyBloomFilter(
               TSFileDescriptor.getInstance().getConfig().getBloomFilterErrorRate(), smallestSize);
+      long bloomFilterReferenceMinTime = bloomFilterReference.getStartTime();
+      long bloomFilterReferenceMaxTime = bloomFilterReference.getEndTime();
+      System.out.println("MinTime: "+bloomFilterReferenceMinTime);
+      System.out.println("MaxTime: "+bloomFilterReferenceMaxTime);
       for (int i = 0; i < smallestSize; i++) {
         long time = bloomFilterReference.getTimeByIndex(i);
         filter.add(String.valueOf(time));
@@ -379,7 +383,9 @@ public class InnerTimeJoinOperator implements ProcessOperator {
           ArrayList<Integer> timeIndexArray = new ArrayList<>();
           for (int pos = 0; pos < block.getPositionCount(); pos++) {
             long time = block.getTimeByIndex(pos);
-            if (filter.contains(String.valueOf(time))) {
+
+            // 如果这个时间不在基准块bloomFilterReference能表示的范围内（time<bloomFilterReference.minTime 或 time>bloomFilterReference.maxTime）则不能用bloomfilter判别
+            if(time<bloomFilterReferenceMinTime||time>bloomFilterReferenceMaxTime||filter.contains(String.valueOf(time))){
 //              try (FileWriter writer = new FileWriter("BloomFilterTest.txt", true)) {
 //                writer.write(String.valueOf(time)+"\n");  // 将字符串写入文件
 //              } catch (IOException e) {
@@ -397,15 +403,15 @@ public class InnerTimeJoinOperator implements ProcessOperator {
           inputBlocksAfterProcess.add(resultBlock);
 
           // TODO: 12-21 直接修改inputBlock[], 否则后面收到的newindex和这里的inputBlock对不上
-//          inputTsBlocks[i] = resultBlock;
+          inputTsBlocks[i] = resultBlock;
         }
       }
       pipeInfo.getJoinStatus(Integer.parseInt(localPlanNode.getId())).setReadyToSendBlock(true);
       // TODO: 测试一下构造的新block是否正确（所有能join上的都要在block内，join不上的无所谓）。可以考虑构造一些时间序列数据（尽量越多越好）在这输出一下看看。
       // 发送到云端
       if (!sinkHandle.isAborted()) {
-//        for (TsBlock block : inputBlocksAfterProcess) {
-          for (TsBlock block : inputTsBlocks) {
+        for (TsBlock block : inputBlocksAfterProcess) {
+//          for (TsBlock block : inputTsBlocks) {
           sinkHandle.send(block); // 发送数据   // TODO: 发送的是一组TsBlock，接收端如何确保正确收到？
           try (FileWriter writer = new FileWriter("HandleTest.txt", true)) {
             writer.write("----[Edge]Send TsBlock: "+ block.getPositionCount() + "\n");  // 将字符串写入文件
