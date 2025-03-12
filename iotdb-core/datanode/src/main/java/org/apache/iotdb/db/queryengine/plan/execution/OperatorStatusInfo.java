@@ -1,6 +1,7 @@
 package org.apache.iotdb.db.queryengine.plan.execution;
 
 import org.apache.iotdb.db.queryengine.execution.exchange.sink.ISinkHandle;
+import org.apache.iotdb.db.queryengine.execution.exchange.source.ISourceHandle;
 
 public class OperatorStatusInfo {
   private int sourceId = 0;
@@ -19,6 +20,7 @@ public class OperatorStatusInfo {
 
   private long startTime = 0; // 起始时间
   private ISinkHandle CToESinkHandle;
+  private ISourceHandle CToESourceHandle;
   private ISinkHandle EToCSinkHandle;
 
   OperatorStatusInfo(int sourceId, int edgeFragmentId) {
@@ -104,5 +106,13 @@ public class OperatorStatusInfo {
 
   public void setHasNext(boolean hasNext) {
     this.hasNext = hasNext;
+  }
+
+  public ISourceHandle getCToESourceHandle() {
+      return CToESourceHandle;
+  }
+
+  public void setCToESourceHandle(ISourceHandle sourceHandle) {
+    this.CToESourceHandle = sourceHandle;
   }
 }

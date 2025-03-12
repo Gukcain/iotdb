@@ -7,13 +7,15 @@ public class PipeInfo {
   private static final PipeInfo instance = new PipeInfo();
 
   // 声明单例对象需要修改的属性
-  private boolean pipeStatus; // pipe的启动状态 0：关闭  1：启动
+  private volatile boolean pipeStatus; // pipe的启动状态 0：关闭  1：启动
   private Map<Integer, ScanStatusInfo> scanStatusInfos;
   private Map<Integer, JoinStatusInfo> joinStatusInfos;
   //    private int edge_rec_fragmentId;    // edge侧接收cloud端join后发来的数据时的fragment
   //    private int edge_send_fragmentId;   // edge侧用bloomfilter处理原始数据后向cloud发送数据的fragment
-  private int fragmentId;
+  private volatile int fragmentId;
   private String sql;
+  private int queryID = 0;
+  private volatile boolean collaborationFlag = false;
 
   // 私有构造方法，避免外部实例化
   private PipeInfo() {
@@ -42,6 +44,8 @@ public class PipeInfo {
     JoinStatusInfo joinStatusInfo = new JoinStatusInfo(sourceId, edgeFragmentId);
     joinStatusInfos.put(sourceId, joinStatusInfo);
   }
+
+  public Map<Integer, JoinStatusInfo> getJoinStatusInfos() {return joinStatusInfos;}
 
   // 获取单例对象的值
   public boolean getPipeStatus() {
@@ -92,10 +96,13 @@ public class PipeInfo {
   }
 
   public void closeAllJoinStatus() {
+    System.out.println("[Close] JoinStatus.size = " + joinStatusInfos.size());
     for (Map.Entry<Integer, JoinStatusInfo> entry : joinStatusInfos.entrySet()) {
+      System.out.println("[Close] close.");
       JoinStatusInfo joinStatusInfo = entry.getValue();
       joinStatusInfo.getCToESinkHandle().setNoMoreTsBlocksOfOneChannel(0);
       joinStatusInfo.getCToESinkHandle().close(); // 可能不需要
+      joinStatusInfo.getCToESourceHandle().close();
       joinStatusInfo.setStatus(false);
     }
   }
@@ -111,4 +118,16 @@ public class PipeInfo {
   public void setSql(String sql) {
     this.sql = sql;
   }
+
+  public boolean isCollaborationFlag() {
+      return collaborationFlag;
+  }
+
+  public void setCollaborationFlag(boolean collaborationFlag) {this.collaborationFlag = collaborationFlag;}
+
+  public int getQueryID() {
+    return queryID;
+  }
+  public void setQueryID(int queryID) {this.queryID = queryID;}
+  public void updateQueryID() { queryID++; }
 }

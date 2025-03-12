@@ -2230,6 +2230,7 @@ public class OperatorTreeGenerator extends PlanVisitor<Operator, LocalExecutionP
       PipeEtoCService.Client client = new PipeEtoCService.Client(protocol);
       transport.open();
       // 调用服务方法
+      System.out.println("[" + System.currentTimeMillis() + "]," + "Thread ID: " + Thread.currentThread().getId() + ", AckMessage.");
       client.AckMessage(fragmentId, sourceId);
       System.out.println("ackData:" + sourceId + " sent successfully.");
 

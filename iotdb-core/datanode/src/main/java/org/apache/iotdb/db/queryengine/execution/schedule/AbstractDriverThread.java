@@ -72,14 +72,19 @@ public abstract class AbstractDriverThread extends Thread implements Closeable {
 
         try (SetThreadName driverTaskName = new SetThreadName(next.getDriverTaskId().getFullId())) {
           execute(next);
-          if(!PipeInfo.getInstance().getPipeStatus()){
-            System.out.println("Pipe is closed. Abort the Query.");
-            try (SetThreadName TransferDriverTaskName =
-                         new SetThreadName(next.getDriver().getDriverTaskId().getFullId())) {
-              next.setAbortCause(DriverTaskAbortedException.BY_INTERNAL_ERROR_SCHEDULED);
-              scheduler.toAborted(next);
-            }
-          }
+//          if(PipeInfo.getInstance().isCollaborationFlag()&&!PipeInfo.getInstance().getPipeStatus()){
+//            PipeInfo.getInstance().setCollaborationFlag(false);
+//            System.out.println("Pipe is closed. Abort the Query.");
+////            try (SetThreadName TransferDriverTaskName =
+////                         new SetThreadName(next.getDriver().getDriverTaskId().getFullId())) {
+////              next.setAbortCause(DriverTaskAbortedException.BY_INTERNAL_ERROR_SCHEDULED);
+////              scheduler.toAborted(next);
+////            }
+////            try (SetThreadName TransferDriverTaskName =
+////                         new SetThreadName(next.getDriver().getDriverTaskId().getFullId())) {
+////              scheduler.runningToFinished(next, new ExecutionContext());
+////            }
+//          }
         } catch (Exception e) {
           // Try-with-resource syntax will call close once after try block is done, so we need to
           // reset the thread name here
@@ -92,8 +97,12 @@ public abstract class AbstractDriverThread extends Thread implements Closeable {
         } finally {
           // Clear the interrupted flag on the current thread, driver cancellation may have
           // triggered an interrupt
-          if (Thread.interrupted() && closed) {
-            // Reset interrupted flag if closed before interrupt
+//          if (Thread.interrupted() && closed) {
+//            // Reset interrupted flag if closed before interrupt
+//            Thread.currentThread().interrupt();
+//          }
+          // 不检查closed状态
+          if (PipeInfo.getInstance().isCollaborationFlag()&&Thread.interrupted()) {
             Thread.currentThread().interrupt();
           }
         }

@@ -219,6 +219,7 @@ public class ShuffleSinkHandle implements ISinkHandle {
   // Lock ShuffleSinkHandle and wait to lock LocalSinkChannel
   @Override
   public void close() {
+    System.out.println("[Close] SinkHandle is closed.");
     if (closed || aborted) {
       return;
     }

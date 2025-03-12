@@ -2803,10 +2803,13 @@ public class ClientRPCServiceImpl implements IClientRPCServiceWithHandler {
         //          System.out.println(time);
         //        }
       }
-
+      Thread.sleep(10);
     } catch (RuntimeException e) {
       throw new RuntimeException(e);
-    } finally {
+    } catch (InterruptedException e){
+      System.out.println("SQL execution interrupted during sleep.");
+      Thread.currentThread().interrupt(); // 恢复中断状态
+    } finally{
       COORDINATOR.cleanupQueryExecution(queryId);
       PipeInfo.getInstance().setPipeStatus(false);
     }
