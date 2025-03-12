@@ -1,6 +1,7 @@
 package org.apache.iotdb.db.queryengine.plan.execution;
 
 import org.apache.iotdb.db.queryengine.execution.exchange.sink.ISinkHandle;
+import org.apache.iotdb.db.queryengine.execution.exchange.source.ISourceHandle;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -24,6 +25,7 @@ public class OperatorStatusInfo {
 
   private long startTime = 0; // 起始时间
   private ISinkHandle EToCSinkHandle;
+  private ISourceHandle EToCSourceHandle;
 
   OperatorStatusInfo(int sourceId, int edgeFragmentId) {
     this.edgeFragmentId = edgeFragmentId;
@@ -122,5 +124,13 @@ public class OperatorStatusInfo {
 
   public void setNewIndexes(List<Integer> newIndexes) {
     this.newIndexes = newIndexes;
+  }
+
+  public ISourceHandle getEToCSourceHandle() {
+    return EToCSourceHandle;
+  }
+
+  public void setEToCSourceHandle(ISourceHandle sourceHandle) {
+    this.EToCSourceHandle = sourceHandle;
   }
 }

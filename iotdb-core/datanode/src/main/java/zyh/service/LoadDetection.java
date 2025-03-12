@@ -161,7 +161,12 @@ public class LoadDetection {
       PipeCtoEService.Client client = new PipeCtoEService.Client(protocol);
       transport.open();
       // 调用服务方法
+//      PipeInfo.getInstance().closeAllJoinStatus();
+//      PipeInfo.getInstance().clearAllJoinStatus();
       client.PipeClose();
+//      PipeInfo.getInstance().closeAllJoinStatus();
+//      PipeInfo.getInstance().closeAllJoinStatus();
+//      PipeInfo.getInstance().clearAllJoinStatus();
       System.out.println("stop successfully.");
 
     } catch (TException x) {
@@ -185,7 +190,7 @@ public class LoadDetection {
       // 调用服务方法
       client.PipeStart(PipeInfo.getInstance().getSql());
       try (FileWriter writer = new FileWriter("sqlTest.txt", true)) {
-        writer.write("PipeStart: "+PipeInfo.getInstance().getSql());  // 将字符串写入文件
+        writer.write("PipeStart: "+PipeInfo.getInstance().getSql()+"\n");  // 将字符串写入文件
       } catch (IOException e) {
         System.out.println("发生错误：" + e.getMessage());
       }

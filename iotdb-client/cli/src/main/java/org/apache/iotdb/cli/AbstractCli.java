@@ -20,6 +20,7 @@
 package org.apache.iotdb.cli;
 
 import org.apache.iotdb.cli.utils.CliContext;
+import org.apache.iotdb.db.queryengine.plan.execution.PipeInfo;
 import org.apache.iotdb.exception.ArgsErrorException;
 import org.apache.iotdb.jdbc.IoTDBConnection;
 import org.apache.iotdb.jdbc.IoTDBJDBCResultSet;
@@ -603,6 +604,9 @@ public abstract class AbstractCli {
     } finally {
       resetArgs();
     }
+//    System.out.println("CLI: PipeStatus "+ PipeInfo.getInstance().getPipeStatus());
+//    if(PipeInfo.getInstance().getPipeStatus())
+//      PipeInfo.getInstance().setPipeCloseFlag(true);
     return executeStatus;
   }
 

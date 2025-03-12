@@ -10,29 +10,32 @@ import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransport;
 import org.apache.thrift.transport.layered.TFramedTransport;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 public class ServiceImpl implements PipeEtoCService.Iface {
 
   @Override
   public void AckMessage(int CloudFragmentId, int SourceId) throws TException {
+    System.out.println("[" + System.currentTimeMillis() + "]," + "Thread ID: " + Thread.currentThread().getId() + ", AckMessage.");
     PipeInfo pipeInfo = PipeInfo.getInstance();
     //        pipeInfo.getScanStatus(SourceId).setCloudFragmentId(CloudFragmentId);
     pipeInfo.getJoinStatus(SourceId).setCloudFragmentId(CloudFragmentId);
-    System.out.println("CloudFragmentId:" + CloudFragmentId + "   sourceid" + SourceId);
+    System.out.println("[ACK] --CloudFragmentId:" + CloudFragmentId + "   sourceid" + SourceId);
     //        while((!pipeInfo.getScanStatus(SourceId).isSetOffset()) &&
     // (!pipeInfo.getScanStatus(SourceId).isSetStartTime())){
-    while (!pipeInfo.getJoinStatus(SourceId).isReadyToSendBlock()) {
-      try {
-        Thread.sleep(10); // 时间
-        //
-        // System.out.println("waiting"+pipeInfo.getScanStatus(SourceId).isSetStartTime());
-        System.out.println("waiting" + pipeInfo.getJoinStatus(SourceId).isSetOffset());
-      } catch (InterruptedException e) {
-        throw new RuntimeException(e);
-      }
-    }
-
+//    while (!pipeInfo.getJoinStatus(SourceId).isReadyToSendBlock()) {
+//      try {
+//        Thread.sleep(10); // 时间
+//        //
+//        // System.out.println("waiting"+pipeInfo.getScanStatus(SourceId).isSetStartTime());
+//        System.out.println("waiting" + pipeInfo.getJoinStatus(SourceId).isSetOffset());
+//      } catch (InterruptedException e) {
+//        throw new RuntimeException(e);
+//      }
+//    }
+    pipeInfo.getJoinStatus(SourceId).setReadyToSendBlock(false);
     // 多线程非阻塞版本
     TTransport transport = null;
     try {
@@ -45,11 +48,12 @@ public class ServiceImpl implements PipeEtoCService.Iface {
       client.AnsMessage(
           pipeInfo.getJoinStatus(SourceId).getEdgeFragmentId(),
           SourceId,
-          pipeInfo.getJoinStatus(SourceId).getOffset());
+          pipeInfo.getQueryID());   // 这里发送的是查询id，变量形参名为ReadOffset
       //      client.AnsMessage(
       //          pipeInfo.getJoinStatus(SourceId).getEdgeFragmentId(),
       //          SourceId,
       //          pipeInfo.getJoinStatus(SourceId).isHasNext());
+      System.out.println("[" + System.currentTimeMillis() + "]," + "Thread ID: " + Thread.currentThread().getId() + ", AnsMessage.");
       System.out.println("ansData:" + SourceId + " sent successfully.");
     } catch (TException x) {
       x.printStackTrace();

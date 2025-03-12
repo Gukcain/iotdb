@@ -7,13 +7,14 @@ public class PipeInfo {
   private static final PipeInfo instance = new PipeInfo();
 
   // 声明单例对象需要修改的属性
-  private boolean pipeStatus; // pipe的启动状态 0：关闭  1：启动
+  private volatile boolean pipeStatus; // pipe的启动状态 0：关闭  1：启动
   private Map<Integer, ScanStatusInfo> scanStatusInfos;
   private Map<Integer, JoinStatusInfo> joinStatusInfos;
   //    private int edge_rec_fragmentId;    // edge侧接收cloud端join后发来的数据时的fragment
   //    private int edge_send_fragmentId;   // edge侧用bloomfilter处理原始数据后向cloud发送数据的fragment
   private int fragmentId;
   private String sql;
+  private int queryID = 0;
   // 线程安全的标志变量
   private volatile boolean pipeStartFlag = false;     // 开启pipe
   private volatile boolean pipeCloseFlag = false;     // 关闭pipe
@@ -24,6 +25,15 @@ public class PipeInfo {
     this.scanStatusInfos = new HashMap<>();
     this.fragmentId = 1000;
     this.joinStatusInfos = new HashMap<>();
+  }
+
+  public void clearPipeInfo() {
+    this.pipeStatus = false;
+    this.joinStatusInfos.clear();
+//    this.fragmentId = 1000;
+    this.sql = null;
+    this.pipeCloseFlag = false;
+    this.pipeStartFlag = false;
   }
 
   // 提供获取实例的静态方法，使用 synchronized 关键字保证线程安全
@@ -85,6 +95,22 @@ public class PipeInfo {
     //        this.scanStatusInfos=new HashMap<>();
     sql = null;
   }
+  public void clearAllJoinStatus() {
+    //        this.scanStatusInfos=new HashMap<>();
+    sql = null;
+  }
+
+  public void closeAllJoinStatus() {
+    for (Map.Entry<Integer, JoinStatusInfo> entry : joinStatusInfos.entrySet()) {
+      JoinStatusInfo joinStatusInfo = entry.getValue();
+      joinStatusInfo.getEToCSinkHandle().setNoMoreTsBlocksOfOneChannel(0);
+      joinStatusInfo.getEToCSinkHandle().close(); // 可能不需要
+      joinStatusInfo.getEToCSourceHandle().close();
+      System.out.println("[Close] closeAllJoinStatus.");
+      joinStatusInfo.setStatus(false);
+    }
+    clearPipeInfo();
+  }
 
   public String getSql() {
     return sql;
@@ -109,4 +135,9 @@ public class PipeInfo {
   public void setPipeCloseFlag(boolean flag) {
     this.pipeCloseFlag = flag;
   }
+
+  public int getQueryID() {
+      return queryID;
+  }
+  public void updateQueryID() { queryID++; }
 }

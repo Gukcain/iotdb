@@ -273,6 +273,7 @@ public class ClientRPCServiceImpl implements IClientRPCServiceWithHandler {
     String statement = req.getStatement();
     PipeInfo pipeInfo=PipeInfo.getInstance();
     pipeInfo.setSql(statement);//设置sql
+    pipeInfo.updateQueryID();
     IClientSession clientSession = SESSION_MANAGER.getCurrSessionAndUpdateIdleTime();
     // quota
     OperationQuota quota = null;
@@ -349,6 +350,7 @@ public class ClientRPCServiceImpl implements IClientRPCServiceWithHandler {
       t = error;
       throw error;
     } finally {
+      PipeInfo.getInstance().clearAllJoinStatus();//查询结束清除表
       long currentOperationCost = System.nanoTime() - startTime;
       COORDINATOR.recordExecutionTime(queryId, currentOperationCost);
 
@@ -369,9 +371,7 @@ public class ClientRPCServiceImpl implements IClientRPCServiceWithHandler {
         quota.close();
       }
 
-//      if(pipeInfo.getPipeStatus())
-//        pipeInfo.setPipeCloseFlag(true);
-      System.out.println("----QueryExecutionEnded");
+      System.out.println("----QueryExecutionInternalEnded");
     }
   }
 

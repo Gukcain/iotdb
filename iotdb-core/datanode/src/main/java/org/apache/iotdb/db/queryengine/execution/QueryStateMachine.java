@@ -22,6 +22,7 @@ package org.apache.iotdb.db.queryengine.execution;
 import org.apache.iotdb.common.rpc.thrift.TSStatus;
 import org.apache.iotdb.commons.exception.IoTDBException;
 import org.apache.iotdb.db.queryengine.common.QueryId;
+import org.apache.iotdb.db.queryengine.plan.execution.PipeInfo;
 import org.apache.iotdb.db.queryengine.plan.execution.QueryExecution;
 
 import com.google.common.util.concurrent.ListenableFuture;
@@ -102,6 +103,11 @@ public class QueryStateMachine {
 
   public void transitionToFinished() {
     transitionToDoneState(FINISHED);
+//        System.out.println("CLI: PipeStatus "+ PipeInfo.getInstance().getPipeStatus());
+    if(PipeInfo.getInstance().getPipeStatus()){
+      PipeInfo.getInstance().setPipeCloseFlag(true);
+    }
+
   }
 
   public void transitionToCanceled() {
